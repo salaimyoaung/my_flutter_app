@@ -1,0 +1,192 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /* =========================
+       Helpers
+    ========================= */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userRole() {
+      return isSignedIn()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : null;
+    }
+
+    function isAdmin() {
+      return userRole() == 'admin';
+    }
+
+    function currentStatus() {
+      return (resource.data.status is string) ? resource.data.status : '';
+    }
+
+    function newStatus() {
+      return (request.resource.data.status is string) ? request.resource.data.status : '';
+    }
+
+    function isTransition(from, to) {
+      return currentStatus() == from && newStatus() == to;
+    }
+
+    function changedOnly(keys) {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly(keys);
+    }
+
+    /* =========================
+       USERS (DEV-SAFE)
+       - self read/write allowed
+       - admin logic stays
+    ========================= */
+    match /users/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /users/{userId}/favorites/{favId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    /* =========================
+       PUBLIC READ COLLECTIONS
+    ========================= */
+    match /products/{productId} {
+      allow read: if true;
+    }
+
+    match /badge_audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /phone_brands/{brandId} {
+      allow read: if true;
+    }
+
+    match /phone_models/{modelId} {
+      allow read: if true;
+    }
+
+    /* =========================
+       ORDERS (STRICT STATE MACHINE)
+    ========================= */
+    match /orders/{orderId} {
+
+      allow read: if isSignedIn() && (
+        resource.data.buyerId == request.auth.uid ||
+        resource.data.sellerId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow create: if isSignedIn() &&
+        request.resource.data.buyerId == request.auth.uid &&
+        request.resource.data.status == 'PAYMENT_PENDING';
+
+      allow update: if isSignedIn() && (
+
+        /* Admin: payment approval */
+        (
+          isAdmin() &&
+          isTransition('PAYMENT_PENDING','PAYMENT_APPROVED') &&
+          changedOnly([
+            'status','paymentApproved','paymentApprovedAt',
+            'paymentApprovedBy','updatedAt','updatedBy'
+          ]) &&
+          request.resource.data.paymentApproved == true &&
+          request.resource.data.paymentApprovedBy == request.auth.uid
+        )
+
+        ||
+
+        /* Seller: accept & send pickup OTP */
+        (
+          resource.data.sellerId == request.auth.uid &&
+          isTransition('PAYMENT_APPROVED','PICKUP_OTP_SENT') &&
+          changedOnly([
+            'status',
+            'sellerAccepted','sellerAcceptedAt',
+            'sellerRejected','sellerRejectedAt',
+            'sellerRejectReason','sellerRejectReasonAt',
+            'pickupOtp','pickupOtpAt','pickupOtpSentBy',
+            'sellerVisible',
+            'updatedAt','updatedBy'
+          ]) &&
+          resource.data.pickupOtp == '' &&
+          request.resource.data.pickupOtp is string &&
+          request.resource.data.sellerAccepted == true &&
+          request.resource.data.sellerRejected == false &&
+          request.resource.data.updatedBy == request.auth.uid
+        )
+
+        ||
+
+        /* Seller: confirm pickup */
+        (
+          resource.data.sellerId == request.auth.uid &&
+          isTransition('PICKUP_OTP_SENT','PICKUP_CONFIRMED') &&
+          changedOnly([
+            'status',
+            'pickupConfirmedAt','pickupConfirmedBy',
+            'pickupOtpUsed','pickupOtpUsedAt',
+            'pickupOtp',
+            'updatedAt','updatedBy'
+          ]) &&
+          resource.data.pickupOtpUsed == false &&
+          request.resource.data.pickupOtpUsed == true &&
+          request.resource.data.pickupOtp == '' &&
+          request.resource.data.updatedBy == request.auth.uid
+        )
+
+        ||
+
+        /* Buyer: cancel before approval */
+        (
+          resource.data.buyerId == request.auth.uid &&
+          isTransition('PAYMENT_PENDING','CANCELLED') &&
+          changedOnly(['status','updatedAt','updatedBy']) &&
+          request.resource.data.updatedBy == request.auth.uid
+        )
+
+        ||
+
+        /* Admin: send delivery OTP */
+        (
+          isAdmin() &&
+          isTransition('PICKUP_CONFIRMED','DELIVERY_OTP_SENT') &&
+          changedOnly([
+            'status',
+            'dropOtpHash','dropOtpSalt','dropOtpCreatedAt',
+            'dropOtpUsed','dropOtpUsedAt',
+            'deliveryLinkTokenHash','deliveryLinkCreatedAt',
+            'deliveryLinkUsed','deliveryLinkUsedAt',
+            'updatedAt','updatedBy'
+          ]) &&
+          (resource.data.deliveryLinkTokenHash == '' || !(resource.data.deliveryLinkTokenHash is string)) &&
+          (resource.data.dropOtpHash == '' || !(resource.data.dropOtpHash is string)) &&
+          (resource.data.dropOtpSalt == '' || !(resource.data.dropOtpSalt is string)) &&
+          request.resource.data.dropOtpHash is string &&
+          request.resource.data.dropOtpSalt is string &&
+          request.resource.data.deliveryLinkTokenHash is string &&
+          request.resource.data.updatedBy == request.auth.uid
+        )
+      );
+    }
+
+    /* =========================
+       BUYER SECRETS
+    ========================= */
+    match /orders/{orderId}/buyer_secrets/{secretId} {
+      allow read: if isSignedIn() &&
+        get(/databases/$(database)/documents/orders/$(orderId)).data.buyerId
+          == request.auth.uid;
+
+      allow write: if isAdmin() &&
+        secretId == 'drop' &&
+        request.resource.data.diff(resource.data).changedKeys()
+          .hasOnly(['dropOtp','createdAt','createdBy']) &&
+        request.resource.data.createdBy == request.auth.uid;
+    }
+  }
+}

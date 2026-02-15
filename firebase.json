@@ -1,0 +1,59 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "e-commence-app-4eafb",
+          "appId": "1:933278906970:android:45e664d4d70aee6f417663",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "e-commence-app-4eafb",
+          "appId": "1:933278906970:ios:b566dc3b4a02e35c417663",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "e-commence-app-4eafb",
+          "configurations": {
+            "android": "1:933278906970:android:45e664d4d70aee6f417663",
+            "ios": "1:933278906970:ios:b566dc3b4a02e35c417663"
+          }
+        }
+      }
+    }
+  },
+
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ],
+
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  }
+}

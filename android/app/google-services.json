@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "933278906970",
+    "project_id": "e-commence-app-4eafb",
+    "storage_bucket": "e-commence-app-4eafb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:933278906970:android:45e664d4d70aee6f417663",
+        "android_client_info": {
+          "package_name": "com.example.realproject"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDlAb3t_D1E2pCGCD4RoS0ljQ9dNCNzkBU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

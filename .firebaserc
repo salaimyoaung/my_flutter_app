@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "default": "e-commence-app-4eafb",
+    "prod": "e-commence-app-4eafb"
+  },
+  "targets": {},
+  "etags": {}
+}
