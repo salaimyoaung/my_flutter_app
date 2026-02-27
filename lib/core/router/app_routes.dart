@@ -16,14 +16,17 @@ class AppRoutes {
   static const String manageModels = '/admin/models';
   static const String orderForm = '/orders/new';
   static const String orderDetail = '/orders/:id';
-  static const String pickupOtp = '/orders/:id/otp';
   static const String notifications = '/notifications';
   static const String brandCollection = '/brands/:brand';
   static const String fixPhoneBrands = '/admin/fix-brands';
+  static const String sellerWall = "/seller-wall";
 
   static String productPath(String id) => '/product/$id';
   static String editProductPath(String id) => '/product/$id/edit';
   static String orderDetailPath(String id) => '/orders/$id';
   static String pickupOtpPath(String id) => '/orders/$id/otp';
   static String brandCollectionPath(String brand) => '/brands/$brand';
+  static const adminImeiReports = "/admin-imei-reports";
+  static const modelList = "/model-list";
+  static const modelListings = "/model-listings";
 }

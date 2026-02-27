@@ -9,6 +9,15 @@ class ProductService {
   Future<void> createProduct(Map<String, dynamic> data) async {
     await _firestore.collection('products').add(data);
   }
+  Future<bool> isImeiAlreadyExists(String imei) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('products')
+        .where('imei', isEqualTo: imei)
+        .limit(1)
+        .get();
+
+    return snapshot.docs.isNotEmpty;
+  }
 
   Future<void> ensureModelExists(String brand, String model) async {
     final brandId = brand.trim().toLowerCase();

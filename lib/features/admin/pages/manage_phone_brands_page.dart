@@ -1,6 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 class ManagePhoneBrandsPage extends StatefulWidget {
   const ManagePhoneBrandsPage({super.key});
 
@@ -9,6 +13,74 @@ class ManagePhoneBrandsPage extends StatefulWidget {
 }
 
 class _ManagePhoneBrandsPageState extends State<ManagePhoneBrandsPage> {
+  @override
+  void initState() {
+    super.initState();
+    _makeMeAdmin();
+  }
+
+  Future<void> _makeMeAdmin() async {
+    try {
+      final callable =
+      FirebaseFunctions.instance.httpsCallable('makeAdmin');
+
+      final result = await callable.call({
+        "uid": FirebaseAuth.instance.currentUser!.uid
+      });
+      final user = FirebaseAuth.instance.currentUser;
+      final idToken = await user?.getIdTokenResult(true);
+
+      print("CLAIMS = ${idToken?.claims}");
+
+      print("✅ RESULT: ${result.data}");
+    } catch (e) {
+      print("❌ makeAdmin ERROR: $e");
+    }
+  }
+
+
+  Future<void> _debugAdminClaim() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final idToken = await user?.getIdTokenResult(true);
+
+    print("UID = ${user?.uid}");
+    print("CLAIMS = ${idToken?.claims}");
+  }
+
+
+  Future<void> _pickAndUploadLogo(String brandId) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+
+      if (picked == null) return;
+
+      final file = File(picked.path);
+
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('brand_logos/$brandId.png');
+
+      await ref.putFile(file);
+
+      final url = await ref.getDownloadURL();
+
+      await FirebaseFirestore.instance
+          .collection('phone_brands')
+          .doc(brandId)
+          .set({
+        "logoUrl": url,
+        "updatedAt": FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      _setLog("Logo updated ✅");
+    } catch (e) {
+      _setLog("Logo upload error ❌ $e");
+    }
+  }
   bool _saving = false;
   String _log = "";
   String _q = "";
@@ -220,9 +292,28 @@ class _ManagePhoneBrandsPageState extends State<ManagePhoneBrandsPage> {
                       key: ValueKey(d.id),
                       child: ListTile(
                         // Drag handle
-                        leading: ReorderableDragStartListener(
-                          index: i,
-                          child: const Icon(Icons.drag_handle),
+                        leading: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ReorderableDragStartListener(
+                              index: i,
+                              child: const Icon(Icons.drag_handle),
+                            ),
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: () => _pickAndUploadLogo(d.id),
+                              child: CircleAvatar(
+                                radius: 18,
+                                backgroundColor: scheme.surfaceVariant,
+                                backgroundImage: (data["logoUrl"] ?? "").toString().isNotEmpty
+                                    ? NetworkImage(data["logoUrl"])
+                                    : null,
+                                child: (data["logoUrl"] ?? "").toString().isEmpty
+                                    ? const Icon(Icons.image, size: 18)
+                                    : null,
+                              ),
+                            ),
+                          ],
                         ),
                         title: Text(name.isEmpty ? "(no name)" : name),
                         subtitle: Text("order: ${order ?? '-'}  •  id: ${d.id}"),

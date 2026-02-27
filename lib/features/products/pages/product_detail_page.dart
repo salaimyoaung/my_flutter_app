@@ -77,10 +77,57 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         elevation: 0.5,
         title: Text(
           product.name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTextStyles.heading(context),
+          style: Theme.of(context).textTheme.headlineMedium,
         ),
+        actions: [
+          Builder(
+            builder: (context) {
+              final user = FirebaseAuth.instance.currentUser;
+
+              if (user == null) {
+                return IconButton(
+                  icon: const Icon(Icons.favorite_border),
+                  onPressed: () => context.go(AppRoutes.signup),
+                );
+              }
+
+              return StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(user.uid)
+                    .collection('favorites')
+                    .doc(product.id)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  final isFav = snapshot.data?.exists ?? false;
+
+                  return IconButton(
+                    icon: Icon(
+                      isFav ? Icons.favorite : Icons.favorite_border,
+                      color: isFav ? Colors.red : null,
+                    ),
+                    onPressed: () async {
+                      final favRef = FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(user.uid)
+                          .collection('favorites')
+                          .doc(product.id);
+
+                      if (isFav) {
+                        await favRef.delete();
+                      } else {
+                        await favRef.set({
+                          'productId': product.id,
+                          'createdAt': FieldValue.serverTimestamp(),
+                        });
+                      }
+                    },
+                  );
+                },
+              );
+            },
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -121,7 +168,68 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   const SizedBox(height: 10),
                   Text(product.price, style: AppTextStyles.price().copyWith(fontSize: 20)),
                   const SizedBox(height: 10),
-                  Text("Seller: $sellerName", style: AppTextStyles.small(context)),
+
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      context.push(
+                        AppRoutes.sellerWall,
+                        extra: {
+                          'sellerId': product.sellerId,
+                          'sellerName': sellerName,
+                        },
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: scheme.surfaceVariant.withOpacity(0.4),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                            stream: FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(product.sellerId)
+                                .snapshots(),
+                            builder: (context, snap) {
+                              if (snap.connectionState == ConnectionState.waiting) {
+                                return const CircleAvatar(
+                                  radius: 14,
+                                  child: Icon(Icons.store, size: 14),
+                                );
+                              }
+
+                              final profile =
+                              (snap.data?.data()?['profileImage'] ?? '').toString();
+
+                              return CircleAvatar(
+                                radius: 14,
+                                backgroundColor: scheme.surfaceVariant,
+                                backgroundImage: profile.isNotEmpty
+                                    ? NetworkImage(profile)
+                                    : null,
+                                child: profile.isEmpty
+                                    ? const Icon(Icons.store, size: 14)
+                                    : null,
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              sellerName,
+                              style: AppTextStyles.small(context).copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Icon(Icons.chevron_right, size: 18, color: scheme.onSurfaceVariant),
+                        ],
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 16),
 
                   Divider(color: scheme.outlineVariant),
@@ -396,59 +504,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       );
                     },
                     icon: const Icon(Icons.shopping_cart, color: Colors.white),
-                    label: const Text("Order တင်မယ် (Escrow)", style: TextStyle(color: Colors.white)),
+                    label: const Text("Order တင်မယ်", style: TextStyle(color: Colors.white)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: scheme.primary,
                       minimumSize: const Size(double.infinity, 50),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                   ),
-
-                  // ✅ Escrow explanation (show to buyers only)
-                  if (!isOwner) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: scheme.primaryContainer.withOpacity(0.35),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: scheme.outlineVariant),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(Icons.info_outline, color: scheme.onPrimaryContainer),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  "ငွေလွှဲစနစ် (Escrow) — Buyer ကြိုသိရန်",
-                                  style: AppTextStyles.main(context).copyWith(
-                                    fontWeight: FontWeight.w900,
-                                    color: scheme.onPrimaryContainer,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  "• Order တင်ပြီးနောက် ငွေကို App (Admin) escrow ထဲ တန်းလွှဲရမယ်။\n"
-                                      "• Admin က ငွေဝင်မှုကို စစ်ပြီး PAYMENT_APPROVED ပြောင်းပေးမယ်။\n"
-                                      "• Delivery က Buyer ဆီ ပစ္စည်းအပ်ပြီးမှ App က Seller ဆီ ငွေချေ/payout ထုတ်ပေးမယ်။",
-                                  style: AppTextStyles.main(context).copyWith(
-                                    fontWeight: FontWeight.w700,
-                                    color: scheme.onPrimaryContainer,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-
                   if (isOwner) ...[
                     const SizedBox(height: 16),
                     ElevatedButton.icon(

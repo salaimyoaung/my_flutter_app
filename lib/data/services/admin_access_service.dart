@@ -2,25 +2,43 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AdminAccessService {
   AdminAccessService._();
-
   static final AdminAccessService instance = AdminAccessService._();
 
-  final Map<String, bool> _cache = {};
+  // Cache admin status in memory to avoid repeated reads
+  bool? _isAdminCache;
+  DateTime? _lastCheck;
 
-  Future<bool> isAdmin(String uid) async {
-    final key = uid.trim();
-    if (key.isEmpty) return false;
-    if (_cache.containsKey(key)) return _cache[key] == true;
-    final doc =
-        await FirebaseFirestore.instance.collection('users').doc(key).get();
-    final data = doc.data() ?? <String, dynamic>{};
-    final role = (data['role'] ?? '').toString().toLowerCase().trim();
-    final isAdmin = data['isAdmin'] == true || role == 'admin';
-    _cache[key] = isAdmin;
-    return isAdmin;
+  void clearCache() {
+    _isAdminCache = null;
+    _lastCheck = null;
   }
 
-  void clear() {
-    _cache.clear();
+  Future<bool> isAdmin(String uid) async {
+    // Return cached if valid (e.g. < 5 min old)
+    if (_isAdminCache != null && _lastCheck != null) {
+      if (DateTime.now().difference(_lastCheck!).inMinutes < 5) {
+        return _isAdminCache!;
+      }
+    }
+
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final data = doc.data();
+      if (data == null) {
+        _isAdminCache = false;
+        return false;
+      }
+
+      final role = (data['role'] ?? '').toString().toLowerCase().trim();
+      final isAdminBool = data['isAdmin'] == true;
+      
+      final isReallyAdmin = (role == 'admin') || isAdminBool;
+      
+      _isAdminCache = isReallyAdmin;
+      _lastCheck = DateTime.now();
+      return isReallyAdmin;
+    } catch (e) {
+      return false;
+    }
   }
 }

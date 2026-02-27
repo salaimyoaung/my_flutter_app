@@ -2,19 +2,18 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:realproject/features/products/pages/seller_brand_wall_view.dart';
 import '../../../app_styles.dart';
 import '../../../core/router/app_routes.dart';
-import '../../../data/models/product_model.dart';
-import 'brand_collection_page.dart';
 
 class SellerWallPage extends StatelessWidget {
   final String sellerId;
-  final String sellerName;
+  final String? sellerName;
 
   const SellerWallPage({
     super.key,
     required this.sellerId,
-    required this.sellerName,
+    this.sellerName,
   });
 
   @override
@@ -27,33 +26,28 @@ class SellerWallPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background(context),
       appBar: AppBar(
-        title: Text(
-          sellerName,
-          style: AppTextStyles.heading(context),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        title: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .doc(sellerId)
+              .snapshots(),
+          builder: (context, snap) {
+            if (snap.hasData && snap.data!.exists) {
+              final name = (snap.data!.data()?['name'] ?? sellerName ?? 'Shop')
+                  .toString();
+              return Text(
+                name,
+                style: AppTextStyles.heading(context),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              );
+            }
+            return Text(
+              sellerName ?? "Shop",
+              style: AppTextStyles.heading(context),
+            );
+          },
         ),
-        backgroundColor: scheme.surface,
-        foregroundColor: scheme.onSurface,
-        elevation: 0.5,
-        actions: [
-          if (isOwner)
-            IconButton(
-              tooltip: "Orders",
-              icon: const Icon(Icons.list_alt),
-              onPressed: () {
-                context.push(AppRoutes.sellerOrders);
-              },
-            ),
-          if (isOwner)
-            IconButton(
-              tooltip: "ပစ္စည်းအသစ်တင်မည်",
-              icon: Icon(Icons.add_box_outlined, color: scheme.primary),
-              onPressed: () {
-                context.push(AppRoutes.addProduct);
-              },
-            ),
-        ],
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
@@ -79,7 +73,7 @@ class SellerWallPage extends StatelessWidget {
 
           return CustomScrollView(
             slivers: [
-              SliverToBoxAdapter(
+              SliverToBoxAdapter  (
                 child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
                   stream: FirebaseFirestore.instance
                       .collection('users')
@@ -88,7 +82,7 @@ class SellerWallPage extends StatelessWidget {
                   builder: (context, userSnap) {
                     String profileImageUrl = '';
                     String coverImageUrl = '';
-                    String displayName = sellerName;
+                    String displayName = sellerName ?? '';
                     String phone = '';
 
                     if (userSnap.hasData && userSnap.data!.exists) {
@@ -222,6 +216,38 @@ class SellerWallPage extends StatelessWidget {
                               ),
                               const SizedBox(height: 6),
 
+                              if (userSnap.hasData && userSnap.data!.exists)
+                                Builder(
+                                  builder: (_) {
+                                    final userData = userSnap.data!.data() ?? {};
+                                    final address = (userData['shopAddress'] ?? '').toString().trim();
+                                    final city = (userData['shopCity'] ?? '').toString().trim();
+
+                                    if (address.isEmpty && city.isEmpty) {
+                                      return const SizedBox.shrink();
+                                    }
+
+                                    return Row(
+                                      children: [
+                                        Icon(Icons.location_on_outlined,
+                                            size: 16, color: scheme.primary),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            city.isNotEmpty ? "$address ($city)" : address,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: AppTextStyles.small(context)
+                                                .copyWith(color: scheme.onSurfaceVariant),
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                ),
+
+                              const SizedBox(height: 6),
+
                               if (isOwner) ...[
                                 Row(
                                   children: [
@@ -289,275 +315,19 @@ class SellerWallPage extends StatelessWidget {
               ),
 
               const SliverToBoxAdapter(child: SizedBox(height: 10)),
-
-              SliverToBoxAdapter(
-                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                  stream: FirebaseFirestore.instance
-                      .collection('products')
-                      .snapshots(),
-                  builder: (context, snap) {
-                    if (snap.connectionState == ConnectionState.waiting) {
-                      return const SizedBox.shrink();
-                    }
-                    if (snap.hasError) {
-                      return const SizedBox.shrink();
-                    }
-
-                    final allDocs = snap.data?.docs ?? const [];
-                    if (allDocs.isEmpty) {
-                      return const SizedBox.shrink();
-                    }
-
-                    final Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>> byBrand = {};
-                    for (final d in allDocs) {
-                      final data = d.data();
-                      final brand = (data['brand'] ?? '').toString().trim();
-                      if (brand.isEmpty) continue;
-                      byBrand.putIfAbsent(brand, () => []).add(d);
-                    }
-
-                    final brands = byBrand.keys.toList()
-                      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-
-                    if (brands.isEmpty) {
-                      return const SizedBox.shrink();
-                    }
-
-                    Future<Map<String, String>> loadBrandLogos(List<String> brandList) async {
-                      final ids = brandList
-                          .map((b) => b.trim().toLowerCase())
-                          .where((b) => b.isNotEmpty)
-                          .toList();
-                      final Map<String, String> logos = {};
-                      if (ids.isEmpty) return logos;
-                      for (var i = 0; i < ids.length; i += 10) {
-                        final chunk = ids.sublist(i, (i + 10).clamp(0, ids.length));
-                        final snap = await FirebaseFirestore.instance
-                            .collection('brands')
-                            .where(FieldPath.documentId, whereIn: chunk)
-                            .get();
-                        for (final doc in snap.docs) {
-                          final data = doc.data();
-                          final logoUrl = (data['logoUrl'] ?? '').toString().trim();
-                          logos[doc.id] = logoUrl;
-                        }
-                      }
-                      return logos;
-                    }
-
-                    final logosFuture = loadBrandLogos(brands);
-
-                    return Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Browse by Brand",
-                            style: AppTextStyles.heading(context),
-                          ),
-                          const SizedBox(height: 10),
-                          FutureBuilder<Map<String, String>>(
-                            future: logosFuture,
-                            builder: (context, logoSnap) {
-                              final logos = logoSnap.data ?? {};
-                              return GridView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                gridDelegate:
-                                    const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 2,
-                                  mainAxisSpacing: 12,
-                                  crossAxisSpacing: 12,
-                                  childAspectRatio: 1.1,
-                                ),
-                                itemCount: brands.length,
-                                itemBuilder: (context, i) {
-                                  final brand = brands[i];
-                                  final brandDocs = byBrand[brand] ?? [];
-                                  final Set<String> modelSet = {};
-                                  for (final bd in brandDocs) {
-                                    final data = bd.data();
-                                    final model = (data['model'] ?? '').toString().trim();
-                                    final name = (data['name'] ?? '').toString().trim();
-                                    final key = model.isNotEmpty ? model : name;
-                                    if (key.isNotEmpty) {
-                                      modelSet.add(key);
-                                    }
-                                  }
-                                  final count = modelSet.isNotEmpty
-                                      ? modelSet.length
-                                      : brandDocs.length;
-                                  final brandId = brand.trim().toLowerCase();
-                                  final logoUrl = logos[brandId] ?? '';
-                                  print("BrandId: $brandId  LogoUrl: $logoUrl");
-                                  return BrandCard(
-                                    brand: brand,
-                                    logoUrl: logoUrl,
-                                    modelCount: count,
-                                    onTap: () {
-                                      final b = Uri.encodeComponent(brand);
-                                      context.push(AppRoutes.brandCollectionPath(b));
-                                    },
-                                  );
-                                },
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-
               if (docs.isEmpty)
                 const SliverToBoxAdapter(
                   child: Padding(
-                    padding: EdgeInsets.all(20.0),
-                    child: Center(child: Text("ရောင်းရန်ပစ္စည်း မရှိသေးပါ")),
+                    padding: EdgeInsets.all(40),
+                    child: Center(
+                      child: Text("ရောင်းရန်ပစ္စည်း မရှိသေးပါ"),
+                    ),
                   ),
                 )
               else
-                SliverPadding(
-                  padding: const EdgeInsets.all(10),
-                  sliver: SliverGrid(
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 10,
-                      crossAxisSpacing: 10,
-                      childAspectRatio: 0.75,
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                          (context, index) {
-                        final doc = docs[index];
-                        final data = doc.data();
-                        final product = Product.fromFirestore(doc.id, data);
-
-                        return Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(10),
-                            onTap: () {
-                              context.push(
-                                AppRoutes.productPath(product.id),
-                                extra: {
-                                  'product': product,
-                                  'sellerName':
-                                      displaySellerNameFromData(data, sellerName),
-                                },
-                              );
-                            },
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: scheme.surface,
-                                borderRadius: BorderRadius.circular(10),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.06),
-                                    blurRadius: 6,
-                                    spreadRadius: 2,
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: ClipRRect(
-                                      borderRadius: const BorderRadius.vertical(
-                                        top: Radius.circular(10),
-                                      ),
-                                      child: product.image.trim().isNotEmpty
-                                          ? Image.network(
-                                              product.image,
-                                              fit: BoxFit.cover,
-                                              width: double.infinity,
-                                              loadingBuilder: (context, child, progress) {
-                                                if (progress == null) return child;
-                                                return Container(
-                                                  color: scheme.surfaceVariant,
-                                                  child: const Center(
-                                                    child: SizedBox(
-                                                      width: 22,
-                                                      height: 22,
-                                                      child: CircularProgressIndicator(
-                                                        strokeWidth: 2,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                              errorBuilder: (_, __, ___) => Container(
-                                                color: scheme.surfaceVariant,
-                                                child: const Center(
-                                                  child: Icon(Icons.broken_image),
-                                                ),
-                                              ),
-                                            )
-                                          : Container(
-                                              color: scheme.surfaceVariant,
-                                              child: const Center(child: Icon(Icons.image)),
-                                            ),
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.all(8.0),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          product.name,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: AppTextStyles.main(context)
-                                              .copyWith(fontWeight: FontWeight.w600),
-                                        ),
-                                        const SizedBox(height: 4),
-                                          Text(product.price, style: AppTextStyles.price()),
-                                          const SizedBox(height: 4),
-                                          Builder(builder: (context) {
-                                            final cond = product.condition.trim();
-                                            final b = product.batteryPercent;
-                                            final hasSpecs = cond.isNotEmpty && b != null;
-                                            final text = hasSpecs
-                                                ? "$cond • Battery ${b}%"
-                                                : "Not specified";
-                                            return Text(
-                                              text,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: AppTextStyles.small(context)
-                                                  .copyWith(color: scheme.onSurfaceVariant),
-                                            );
-                                          }),
-                                          const SizedBox(height: 6),
-                                          SizedBox(
-                                            height: 30,
-                                            child: OutlinedButton.icon(
-                                              onPressed: () {
-                                                context.push(
-                                                  AppRoutes.editProductPath(product.id),
-                                                );
-                                              },
-                                              icon: const Icon(Icons.edit, size: 16),
-                                              label: const Text("Edit"),
-                                              style: OutlinedButton.styleFrom(
-                                                visualDensity: VisualDensity.compact,
-                                              ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                      childCount: docs.length,
-                    ),
+                SliverFillRemaining(
+                  child: SellerBrandWallView(
+                    sellerId: sellerId,
                   ),
                 ),
             ],
@@ -571,5 +341,62 @@ class SellerWallPage extends StatelessWidget {
   String displaySellerNameFromData(Map<String, dynamic> data, String fallback) {
     final s = (data['sellerName'] ?? '').toString().trim();
     return s.isEmpty ? fallback : s;
+  }
+}
+class BrandCard extends StatelessWidget {
+  final String brand;
+  final String logoUrl;
+  final int modelCount;
+  final VoidCallback onTap;
+
+  const BrandCard({
+    super.key,
+    required this.brand,
+    required this.logoUrl,
+    required this.modelCount,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: scheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: scheme.outlineVariant),
+        ),
+        child: Row(
+          children: [
+            if (logoUrl.isNotEmpty)
+              Image.network(logoUrl, width: 40, height: 40)
+            else
+              const Icon(Icons.phone_android, size: 40),
+
+            const SizedBox(width: 16),
+
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    brand,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  Text("$modelCount models"),
+                ],
+              ),
+            ),
+
+            const Icon(Icons.chevron_right),
+          ],
+        ),
+      ),
+    );
   }
 }

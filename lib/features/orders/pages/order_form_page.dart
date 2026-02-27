@@ -1,11 +1,12 @@
-// order_form_page.dart (NO Screenshot / NO Firebase Storage)
-// - Only Transaction ID required
-// - Save TxID into order at create time (paymentProofUrl = NO_STORAGE_OK placeholder)
+// order_form_page.dart
+// DEPOSIT + ADMIN APPROVE FLOW (FULL CLEAN VERSION)
 
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app_styles.dart';
 import '../../../core/router/app_routes.dart';
@@ -30,15 +31,37 @@ class _OrderFormPageState extends State<OrderFormPage> {
   final _buyerNameController = TextEditingController();
   final _buyerPhoneController = TextEditingController();
   final _addressController = TextEditingController();
-
-  // ✅ Payment proof (Tx only for now)
   final _txController = TextEditingController();
 
+  final ImagePicker _picker = ImagePicker();
+
+  File? _screenshotFile;
+
+  String? _buyerCity;
+  String? _sellerCity;
+
+  int _depositAmount = 0;
   int _qty = 1;
   bool _loading = false;
 
-  // ✅ placeholder (>= 10 chars) for rules compatibility (no storage yet)
-  static const String _noStorageProofUrl = "NO_STORAGE_OK";
+  final List<String> majorCities = [
+    "Yangon",
+    "Mandalay",
+    "Naypyidaw",
+    "Bago",
+    "Taungoo",
+    "Pyay",
+    "Mawlamyine",
+    "Pathein",
+    "Magway",
+    "Myitkyina",
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSellerCity();
+  }
 
   @override
   void dispose() {
@@ -49,224 +72,98 @@ class _OrderFormPageState extends State<OrderFormPage> {
     super.dispose();
   }
 
-  // =========================================================
-  // ✅ Payment/Escrow accounts (static for now)
-  // TODO: later load from Firestore app_config/payment_accounts
-  // =========================================================
-  Map<String, String> _paymentAccounts() {
-    return const {
-      "KBZPay": "09xxxxxxxx",
-      "WavePay": "09xxxxxxxx",
-      "Bank (AYA)": "AYA xxxxxxxx",
-    };
+  Future<void> _loadSellerCity() async {
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.product.sellerId)
+        .get();
+
+    final city = (doc.data()?['shopCity'] ?? '').toString().trim();
+
+    _sellerCity = city.isEmpty ? null : city;
+
+    _calculateDeposit();
+  }
+
+  void _calculateDeposit() {
+    if (_buyerCity == null || _sellerCity == null) return;
+
+    if (_buyerCity == _sellerCity) {
+      _depositAmount = 10000;
+    } else {
+      _depositAmount = 20000;
+    }
+
+    setState(() {});
+  }
+
+  Future<void> _pickScreenshot() async {
+    final picked = await _picker.pickImage(source: ImageSource.gallery);
+    if (picked == null) return;
+    setState(() => _screenshotFile = File(picked.path));
+  }
+
+  Future<String> _uploadScreenshot(File file) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception("Login required");
+
+    final ref = FirebaseStorage.instance
+        .ref()
+        .child(
+      "deposit_screenshots/${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg",
+    );
+
+    await ref.putFile(file);
+    return await ref.getDownloadURL();
   }
 
   void _snack(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-  }
-
-  Future<void> _copy(String text) async {
-    await Clipboard.setData(ClipboardData(text: text));
-    _snack("Copied ✅");
-  }
-
-  void _showPaymentHowToSheet() {
-    final scheme = Theme.of(context).colorScheme;
-    final accts = _paymentAccounts();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: scheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
-      builder: (_) => SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 22),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("ငွေလွှဲစနစ် (Escrow)", style: AppTextStyles.heading(context)),
-                const SizedBox(height: 10),
-                Text(
-                  "Buyer ပေးတဲ့ငွေကို App escrow အဖြစ် admin က ထိန်းထားပြီး\n"
-                      "Delivery အတည်ပြုပြီးမှ Seller ကို payout ထုတ်ပေးမယ်။",
-                  style: AppTextStyles.main(context),
-                ),
-                const SizedBox(height: 12),
-                Divider(color: scheme.outlineVariant),
-                const SizedBox(height: 10),
-                Text(
-                  "အဆင့်လိုက် (Buyer ကြိုသိရန်)",
-                  style: AppTextStyles.main(context).copyWith(fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "1) Buyer က Order Confirm လုပ်မယ် (PAYMENT_PENDING)\n"
-                      "2) Buyer က အောက်ပါ account တွေထဲကို ငွေလွှဲမယ်\n"
-                      "3) Buyer က Transaction ID ကို Order ထဲမှာ တင်မယ်\n"
-                      "4) Admin က စစ်ပြီး PAYMENT_APPROVED ပြောင်းမယ်\n"
-                      "5) Seller က Accept လုပ်ပြီး Pickup OTP flow စမယ်\n"
-                      "6) Delivery အတည်ပြုပြီးမှ Seller ကို payout (SETTLED)",
-                  style: AppTextStyles.main(context),
-                ),
-                const SizedBox(height: 12),
-                Divider(color: scheme.outlineVariant),
-                const SizedBox(height: 10),
-                Text(
-                  "ငွေလွှဲရမည့်နေရာများ (App Escrow)",
-                  style: AppTextStyles.main(context).copyWith(fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(height: 8),
-                ...accts.entries.map((e) {
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: scheme.surfaceVariant.withOpacity(0.55),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: scheme.outlineVariant),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.account_balance_wallet_outlined, size: 18),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                e.key,
-                                style: AppTextStyles.main(context).copyWith(fontWeight: FontWeight.w900),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(e.value, style: AppTextStyles.main(context)),
-                              const SizedBox(height: 4),
-                              Text("(App Escrow)", style: AppTextStyles.small(context)),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          onPressed: () => _copy(e.value),
-                          icon: const Icon(Icons.copy, size: 18),
-                          tooltip: "Copy",
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                Text(
-                  "မှတ်ချက်: Storage upgrade မလုပ်သေးလို့ Screenshot မတင်ခိုင်းပါဘူး။ Transaction ID ပဲတင်ပေးပါ။",
-                  style: AppTextStyles.small(context),
-                ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.check),
-                    label: const Text("နားလည်ပါပြီ"),
-                    onPressed: () => Navigator.pop(context),
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<bool> _confirmEscrowBeforeOrder() async {
-    final scheme = Theme.of(context).colorScheme;
-    final ok = await showDialog<bool>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogCtx) => AlertDialog(
-        backgroundColor: scheme.surface,
-        title: Text("Escrow စနစ် သဘောတူလား?", style: AppTextStyles.heading(context)),
-        content: Text(
-          "Order Confirm လုပ်ပြီးနောက် payment ကို App escrow (admin) ထဲ လွှဲရမယ်။\n"
-              "Admin စစ်ဆေးအတည်ပြုပြီးမှ Seller က accept လုပ်နိုင်မယ်။\n"
-              "Delivery အတည်ပြုပြီးမှ Seller ကို payout ထုတ်ပေးမယ်။\n\n"
-              "အဲ့တာ သဘောတူလား?",
-          style: AppTextStyles.main(context),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx, false),
-            child: const Text("မလုပ်တော့ပါ"),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx, true),
-            child: const Text("သဘောတူပါတယ်"),
-          ),
-        ],
-      ),
-    );
-    return ok == true;
-  }
-
-  Future<void> _prefillFromProfile() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-    final data = doc.data() ?? {};
-    if (!mounted) return;
-
-    setState(() {
-      _buyerNameController.text = (data['name'] ?? data['displayName'] ?? '').toString();
-      _buyerPhoneController.text = (data['phone'] ?? '').toString();
-    });
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
   }
 
   Future<void> _submit() async {
     final user = FirebaseAuth.instance.currentUser;
+
     if (user == null) {
       context.go(AppRoutes.signup);
       return;
     }
 
-    // ✅ own product guard
-    if (widget.product.sellerId.trim() == user.uid.trim()) {
-      _snack("ကိုယ့်ပစ္စည်းကို ကိုယ် Order မတင်နိုင်ပါ");
+    // 🔒 Validation
+    if (_buyerNameController.text.trim().isEmpty ||
+        _buyerPhoneController.text.trim().isEmpty ||
+        _addressController.text.trim().isEmpty) {
+      _snack("အချက်အလက်ပြည့်စုံအောင်ဖြည့်ပါ");
       return;
     }
 
-    final buyerName = _buyerNameController.text.trim();
-    final buyerPhone = _buyerPhoneController.text.trim();
-    final address = _addressController.text.trim();
-
-    if (buyerName.isEmpty || buyerPhone.isEmpty || address.isEmpty) {
-      _snack("နာမည် / ဖုန်း / လိပ်စာ ပြည့်စုံအောင် ဖြည့်ပါ");
+    if (_buyerCity == null || _buyerCity!.isEmpty) {
+      _snack("မြို့ရွေးပါ");
       return;
     }
 
-    // ✅ TxID validate (required)
-    final txId = _txController.text.trim();
-    if (txId.length < 4 || txId.length > 120) {
-      _snack("Transaction ID မမှန်ပါ (4~120)");
+    if (_depositAmount == 0) {
+      _snack("Deposit မတွက်ရသေးပါ");
       return;
     }
 
-    // ✅ Confirm escrow rules
-    final ok = await _confirmEscrowBeforeOrder();
-    if (!ok) return;
+    if (_txController.text.trim().isEmpty) {
+      _snack("Transaction ID ထည့်ပါ");
+      return;
+    }
+
+    if (_screenshotFile == null) {
+      _snack("Screenshot ထည့်ပါ");
+      return;
+    }
 
     setState(() => _loading = true);
 
     try {
+      final screenshotUrl = await _uploadScreenshot(_screenshotFile!);
+
       await OrderService.createOrder(
         productId: widget.product.id,
         productName: widget.product.name,
@@ -275,26 +172,28 @@ class _OrderFormPageState extends State<OrderFormPage> {
         sellerId: widget.product.sellerId,
         sellerName: widget.sellerName,
         buyerId: user.uid,
-        buyerName: buyerName,
-        buyerPhone: buyerPhone,
-        deliveryAddress: address,
+        buyerName: _buyerNameController.text.trim(),
+        buyerPhone: _buyerPhoneController.text.trim(),
+        buyerAddress: _addressController.text.trim(),
         quantity: _qty,
-        paymentMethod: 'ESCROW',
+        depositAmount: _depositAmount,
+        depositCity: _buyerCity!, // FIXED
+        depositTxId: _txController.text.trim(),
+        depositScreenshotUrl: screenshotUrl,
 
-        // ✅ Save Tx only (no screenshot)
-        paymentTxId: txId,
-        paymentProofUrl: _noStorageProofUrl,
-        paymentProofStatus: 'SUBMITTED',
       );
 
       if (!mounted) return;
+
       Navigator.pop(context);
-      _snack("Order တင်ပြီးပါပြီ ✅ (PAYMENT_PENDING)");
+      _snack("Order တင်ပြီးပါပြီ (Admin Approval စောင့်ပါ)");
+
     } catch (e) {
-      if (!mounted) return;
-      _snack("Order မအောင်မြင်ပါ: $e");
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      _snack("Error: $e");
+    }
+
+    if (mounted) {
+      setState(() => _loading = false);
     }
   }
 
@@ -305,246 +204,136 @@ class _OrderFormPageState extends State<OrderFormPage> {
     return Scaffold(
       backgroundColor: AppColors.background(context),
       appBar: AppBar(
-        title: Text("Order တင်မည်", style: AppTextStyles.heading(context)),
-        backgroundColor: scheme.surface,
-        foregroundColor: scheme.onSurface,
-        elevation: 0.5,
-        actions: [
-          IconButton(
-            tooltip: "Profile မှ auto-fill",
-            onPressed: _prefillFromProfile,
-            icon: const Icon(Icons.person_search),
-          ),
-        ],
+        title: const Text("Order + Deposit"),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // Product summary
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: scheme.surface,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 6,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: widget.product.image.trim().isNotEmpty
-                        ? Image.network(
-                      widget.product.image,
-                      width: 72,
-                      height: 72,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        width: 72,
-                        height: 72,
-                        color: scheme.surfaceVariant,
-                        child: const Icon(Icons.broken_image),
-                      ),
-                    )
-                        : Container(
-                      width: 72,
-                      height: 72,
-                      color: scheme.surfaceVariant,
-                      child: const Icon(Icons.image),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(widget.product.name, style: AppTextStyles.main(context)),
-                        const SizedBox(height: 6),
-                        Text(widget.product.price, style: AppTextStyles.price()),
-                        const SizedBox(height: 6),
-                        Text("Seller: ${widget.sellerName}", style: AppTextStyles.small(context)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
 
-            // ✅ Escrow info card
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: scheme.primaryContainer.withOpacity(0.35),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: scheme.outlineVariant),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.info_outline, color: scheme.onPrimaryContainer),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Payment: Escrow (Admin approve) — Order မတင်ခင် သိထားရန်",
-                          style: AppTextStyles.main(context).copyWith(
-                            fontWeight: FontWeight.w900,
-                            color: scheme.onPrimaryContainer,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          "Order တင်ပြီးနောက် payment ကို App escrow ထဲ လွှဲရမယ်။\n"
-                              "Admin စစ်ဆေးအတည်ပြုပြီးမှ Seller က accept လုပ်နိုင်မယ်။",
-                          style: AppTextStyles.main(context).copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: scheme.onPrimaryContainer,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: TextButton.icon(
-                            onPressed: _showPaymentHowToSheet,
-                            icon: const Icon(Icons.receipt_long),
-                            label: const Text("ငွေလွှဲနည်း / လွှဲရမည့်နေရာ ကြည့်မယ်"),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
+            /// Buyer Info
             TextField(
               controller: _buyerNameController,
-              enabled: !_loading,
               decoration: const InputDecoration(
-                labelText: "ဝယ်သူအမည်",
+                labelText: "Buyer Name",
                 border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.person),
               ),
             ),
             const SizedBox(height: 12),
 
             TextField(
               controller: _buyerPhoneController,
-              enabled: !_loading,
               keyboardType: TextInputType.phone,
               decoration: const InputDecoration(
-                labelText: "ဖုန်းနံပါတ်",
+                labelText: "Phone Number",
                 border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.phone),
               ),
             ),
             const SizedBox(height: 12),
+            /// City Dropdown
+            DropdownButtonFormField<String>(
+              value: _buyerCity,
+              decoration: const InputDecoration(
+                labelText: "Your City",
+                border: OutlineInputBorder(),
+              ),
+              items: majorCities
+                  .map((e) => DropdownMenuItem(
+                value: e,
+                child: Text(e),
+              ))
+                  .toList(),
+              onChanged: (v) {
+                setState(() {
+                  _buyerCity = v;
+                });
+                _calculateDeposit();
+              },
+            ),
+
+            const SizedBox(height: 16),
+
+
+
+      TextFormField(
+      controller: _addressController,
+      maxLines: 3,
+      textInputAction: TextInputAction.done,
+      keyboardType: TextInputType.streetAddress,
+      decoration: InputDecoration(
+        labelText: "Buyer Address",
+        hintText: "Street, Ward, Township, Landmark",
+        border: const OutlineInputBorder(),
+        prefixIcon: const Icon(Icons.location_on_outlined),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 14,
+        ),
+      ),
+      validator: (value) {
+        final v = value?.trim() ?? "";
+
+        if (v.isEmpty) {
+          return "Buyer address ထည့်ပါ";
+        }
+
+        if (v.length < 10) {
+          return "Address အပြည့်အစုံ ထည့်ပါ";
+        }
+
+        return null;
+      },
+    ),
+
+            if (_depositAmount > 0)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: scheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      "Deposit Amount: $_depositAmount MMK",
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      "ပစ္စည်းရရှိပြီး Received နှိပ်ပါက Admin မှ Deposit ပြန်လွှဲပေးပါမည်။",
+                      textAlign: TextAlign.center,
+                    )
+                  ],
+                ),
+              ),
+
+            const SizedBox(height: 20),
+
+            const Text("Deposit Bank Accounts"),
+            const SizedBox(height: 8),
+            const Text("KBZPay - 09xxxxxxx"),
+            const Text("WavePay - 09xxxxxxx"),
+            const Text("AYA Bank - xxxxxxxx"),
+
+            const SizedBox(height: 20),
 
             TextField(
-              controller: _addressController,
-              enabled: !_loading,
-              maxLines: 3,
+              controller: _txController,
               decoration: const InputDecoration(
-                labelText: "ပို့ဆောင်မည့် လိပ်စာ",
+                labelText: "Transaction ID",
                 border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.location_on),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // qty
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                border: Border.all(color: scheme.outlineVariant),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  const Text("အရေအတွက်"),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: (_qty > 1 && !_loading) ? () => setState(() => _qty--) : null,
-                    icon: const Icon(Icons.remove_circle_outline),
-                  ),
-                  Text("$_qty", style: AppTextStyles.main(context)),
-                  IconButton(
-                    onPressed: !_loading ? () => setState(() => _qty++) : null,
-                    icon: const Icon(Icons.add_circle_outline),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // ✅ Transaction ID UI (ONLY)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: scheme.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: scheme.outlineVariant),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Transaction ID တင်ရန်",
-                    style: AppTextStyles.main(context).copyWith(fontWeight: FontWeight.w900),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _txController,
-                    enabled: !_loading,
-                    decoration: const InputDecoration(
-                      labelText: "Transaction ID",
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.confirmation_number_outlined),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    "မှတ်ချက်: Storage upgrade မလုပ်သေးလို့ Screenshot မတင်ခိုင်းပါဘူး။ Transaction ID ပဲတင်ပါ။",
-                    style: AppTextStyles.small(context),
-                  ),
-                ],
               ),
             ),
 
             const SizedBox(height: 16),
 
-            // Payment summary row
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: scheme.surfaceVariant,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.lock_outline),
-                  const SizedBox(width: 10),
-                  const Expanded(child: Text("Payment: Escrow (Admin approve)")),
-                  TextButton(
-                    onPressed: _showPaymentHowToSheet,
-                    child: const Text("Details"),
-                  ),
-                ],
-              ),
+            OutlinedButton.icon(
+              onPressed: _pickScreenshot,
+              icon: const Icon(Icons.image),
+              label: const Text("Upload Screenshot"),
             ),
-            const SizedBox(height: 16),
+
+            const SizedBox(height: 30),
 
             _loading
                 ? const CircularProgressIndicator()
@@ -552,15 +341,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: scheme.primary,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text("Order Confirm"),
+                child: const Text("Submit Order"),
               ),
             ),
           ],

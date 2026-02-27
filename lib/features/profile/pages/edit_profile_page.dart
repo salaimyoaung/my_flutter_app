@@ -9,7 +9,6 @@ import '../../../app_styles.dart';
 class EditProfilePage extends StatefulWidget {
   final String currentName;
   final String currentPhone;
-
   final String currentCoverImage;
   final String currentProfileImage;
 
@@ -28,11 +27,27 @@ class EditProfilePage extends StatefulWidget {
 class _EditProfilePageState extends State<EditProfilePage> {
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
+  late final TextEditingController _shopAddressController;
+  late final TextEditingController _shopCityController;
+
+  final List<String> majorCities = [
+    "Yangon",
+    "Mandalay",
+    "Naypyidaw",
+    "Bago",
+    "Taungoo",
+    "Pyay",
+    "Mawlamyine",
+    "Pathein",
+    "Magway",
+    "Myitkyina",
+  ];
 
   final _picker = ImagePicker();
 
   String _profileUrl = '';
   String _coverUrl = '';
+  String? _selectedCity;
 
   File? _profileFile;
   File? _coverFile;
@@ -42,17 +57,41 @@ class _EditProfilePageState extends State<EditProfilePage> {
   @override
   void initState() {
     super.initState();
+
     _nameController = TextEditingController(text: widget.currentName);
     _phoneController = TextEditingController(text: widget.currentPhone);
+    _shopAddressController = TextEditingController();
+    _shopCityController = TextEditingController();
 
     _profileUrl = widget.currentProfileImage;
     _coverUrl = widget.currentCoverImage;
+
+    _loadExistingLocation();
+  }
+
+  Future<void> _loadExistingLocation() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final doc =
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+
+    final data = doc.data();
+    if (data == null) return;
+
+    _shopAddressController.text =
+        (data['shopAddress'] ?? '').toString();
+    _shopCityController.text =
+        (data['shopCity'] ?? '').toString();
+    _selectedCity = (data['shopCity'] ?? '').toString();
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _shopAddressController.dispose();
+    _shopCityController.dispose();
     super.dispose();
   }
 
@@ -78,7 +117,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   Future<String> _uploadToStorage({
     required File file,
-    required String path, // e.g. "profiles/{uid}.jpg"
+    required String path,
   }) async {
     final ref = FirebaseStorage.instance.ref().child(path);
     final metadata = SettableMetadata(contentType: 'image/jpeg');
@@ -89,6 +128,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
   Future<void> _updateProfile() async {
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim();
+    final address = _shopAddressController.text.trim();
+    final city = _shopCityController.text.trim();
 
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -101,17 +142,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
     try {
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        if (mounted) {
-          setState(() => _isLoading = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Login မဝင်ထားပါ")),
-          );
-        }
-        return;
-      }
+      if (user == null) return;
 
-      // 1) upload selected images (if any)
       if (_profileFile != null) {
         _profileUrl = await _uploadToStorage(
           file: _profileFile!,
@@ -126,15 +158,15 @@ class _EditProfilePageState extends State<EditProfilePage> {
         );
       }
 
-      // 2) update firestore
       final update = <String, dynamic>{
         'name': name,
         'phone': phone,
+        'shopAddress': _shopAddressController.text.trim(),
+        'shopCity': _selectedCity ?? '',
         'updatedAt': FieldValue.serverTimestamp(),
       };
-
-      if (_profileUrl.trim().isNotEmpty) update['profileImage'] = _profileUrl.trim();
-      if (_coverUrl.trim().isNotEmpty) update['coverImage'] = _coverUrl.trim();
+      if (_profileUrl.isNotEmpty) update['profileImage'] = _profileUrl;
+      if (_coverUrl.isNotEmpty) update['coverImage'] = _coverUrl;
 
       await FirebaseFirestore.instance
           .collection('users')
@@ -147,10 +179,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
         const SnackBar(content: Text("Profile ပြင်ဆင်ပြီးပါပြီ")),
       );
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -163,16 +193,17 @@ class _EditProfilePageState extends State<EditProfilePage> {
     return Scaffold(
       backgroundColor: AppColors.background(context),
       appBar: AppBar(
-        title: Text("Profile ပြင်ဆင်ရန်", style: AppTextStyles.heading(context)),
+        title: Text("Profile ပြင်ဆင်ရန်",
+            style: AppTextStyles.heading(context)),
         backgroundColor: scheme.surface,
         foregroundColor: scheme.onSurface,
-        elevation: 0.5,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
+        padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            // COVER PREVIEW + PICK BUTTON
+
+            // ✅ COVER PREVIEW
             Container(
               height: 140,
               width: double.infinity,
@@ -180,19 +211,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
               decoration: BoxDecoration(
                 color: scheme.surfaceVariant,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: scheme.outlineVariant),
               ),
               child: _coverFile != null
                   ? Image.file(_coverFile!, fit: BoxFit.cover)
-                  : (_coverUrl.trim().isNotEmpty
-                  ? Image.network(
-                _coverUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Center(
-                  child: Icon(Icons.broken_image, color: scheme.onSurfaceVariant),
-                ),
-              )
-                  : Center(child: Icon(Icons.photo, color: scheme.onSurfaceVariant))),
+                  : (_coverUrl.isNotEmpty
+                  ? Image.network(_coverUrl, fit: BoxFit.cover)
+                  : const Center(child: Icon(Icons.photo))),
             ),
             const SizedBox(height: 10),
             OutlinedButton.icon(
@@ -201,17 +225,19 @@ class _EditProfilePageState extends State<EditProfilePage> {
               label: const Text("Cover ပုံရွေးမည်"),
             ),
 
-            const SizedBox(height: 18),
+            const SizedBox(height: 20),
 
-            // PROFILE PREVIEW + PICK BUTTON
+            // ✅ PROFILE PREVIEW
             CircleAvatar(
-              radius: 44,
+              radius: 45,
               backgroundColor: scheme.primaryContainer,
               backgroundImage: _profileFile != null
                   ? FileImage(_profileFile!)
-                  : (_profileUrl.trim().isNotEmpty ? NetworkImage(_profileUrl) as ImageProvider : null),
-              child: (_profileFile == null && _profileUrl.trim().isEmpty)
-                  ? Icon(Icons.store, size: 44, color: scheme.primary)
+                  : (_profileUrl.isNotEmpty
+                  ? NetworkImage(_profileUrl)
+                  : null) as ImageProvider?,
+              child: (_profileFile == null && _profileUrl.isEmpty)
+                  ? Icon(Icons.store, size: 40, color: scheme.primary)
                   : null,
             ),
             const SizedBox(height: 10),
@@ -221,7 +247,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
               label: const Text("Profile ပုံရွေးမည်"),
             ),
 
-            const SizedBox(height: 18),
+            const SizedBox(height: 20),
 
             TextField(
               controller: _nameController,
@@ -242,18 +268,49 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 prefixIcon: Icon(Icons.phone),
               ),
             ),
+            const SizedBox(height: 15),
+
+            TextField(
+              controller: _shopAddressController,
+              decoration: const InputDecoration(
+                labelText: "ဆိုင်လိပ်စာ",
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.store),
+              ),
+            ),
+
+            const SizedBox(height: 15),
+
+            DropdownButtonFormField<String>(
+              value: _selectedCity?.isEmpty == true ? null : _selectedCity,
+              decoration: const InputDecoration(
+                labelText: "မြို့",
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.location_city),
+              ),
+              items: majorCities
+                  .map((city) => DropdownMenuItem(
+                value: city,
+                child: Text(city),
+              ))
+                  .toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedCity = value;
+                });
+              },
+            ),
             const SizedBox(height: 24),
 
             _isLoading
                 ? const CircularProgressIndicator()
                 : ElevatedButton(
+              onPressed: _updateProfile,
               style: ElevatedButton.styleFrom(
                 backgroundColor: scheme.primary,
                 foregroundColor: Colors.white,
                 minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              onPressed: _updateProfile,
               child: const Text("ပြင်ဆင်မှုများ သိမ်းမည်"),
             ),
           ],

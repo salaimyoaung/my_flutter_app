@@ -9,6 +9,7 @@ import 'data/services/notification_service.dart';
 import 'core/router/app_router.dart';
 import 'core/router/app_routes.dart';
 import 'core/router/app_navigator_keys.dart';
+import 'core/theme/app_theme.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -104,17 +105,8 @@ class _MyMarketplaceAppState extends State<MyMarketplaceApp> {
       debugShowCheckedModeBanner: false,
       scaffoldMessengerKey: rootMessengerKey,
       routerConfig: appRouter,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
     );
   }

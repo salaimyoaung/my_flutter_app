@@ -1,4 +1,3 @@
-// order_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class OrderModel {
@@ -15,38 +14,22 @@ class OrderModel {
   final String buyerId;
   final String buyerName;
   final String buyerPhone;
-  final String deliveryAddress;
+  final String buyerAddress;
+
 
   final int quantity;
-  final String paymentMethod;
   final String status;
 
-  // ✅ seller accept/reject flags
   final bool sellerAccepted;
   final bool sellerRejected;
-
-  // ✅ optional
   final String sellerRejectReason;
 
-  // ✅ Payment proof fields (Buyer uploads / submits)
-  final String paymentTxId;
-  final String paymentProofUrl;
-  final String paymentProofStatus; // e.g. SUBMITTED / REVIEWING / REJECTED / APPROVED
-  final Timestamp? paymentProofAt;
-  final String paymentProofBy;
-
-  // ✅ Drop stage flags/audit (stored in orders doc)
-  final bool dropOtpUsed;
-  final Timestamp? dropOtpCreatedAt;
-
-  final bool deliveryLinkUsed;
-  final Timestamp? deliveryLinkCreatedAt;
-
-  // ✅ Delivered audit (stored in orders doc)
-  final Timestamp? deliveredAt;
-  final String deliveredBy;
+  final int depositAmount;
+  final String depositStatus;
+  final String depositCity;
 
   final Timestamp? createdAt;
+  final Timestamp? updatedAt;
 
   const OrderModel({
     required this.id,
@@ -59,32 +42,17 @@ class OrderModel {
     required this.buyerId,
     required this.buyerName,
     required this.buyerPhone,
-    required this.deliveryAddress,
+    required this.buyerAddress,
     required this.quantity,
-    required this.paymentMethod,
     required this.status,
     required this.sellerAccepted,
     required this.sellerRejected,
     required this.sellerRejectReason,
-
-    // ✅ payment proof
-    required this.paymentTxId,
-    required this.paymentProofUrl,
-    required this.paymentProofStatus,
-    required this.paymentProofAt,
-    required this.paymentProofBy,
-
-    // ✅ drop stage
-    required this.dropOtpUsed,
-    required this.dropOtpCreatedAt,
-    required this.deliveryLinkUsed,
-    required this.deliveryLinkCreatedAt,
-
-    // ✅ delivered audit
-    required this.deliveredAt,
-    required this.deliveredBy,
-
+    required this.depositAmount,
+    required this.depositStatus,
+    required this.depositCity,
     required this.createdAt,
+    required this.updatedAt,
   });
 
   // ---------- helpers ----------
@@ -93,15 +61,11 @@ class OrderModel {
   static int _i(dynamic v) {
     if (v is int) return v;
     if (v is num) return v.toInt();
-    return int.tryParse((v ?? '').toString()) ?? 1;
+    return int.tryParse((v ?? '').toString()) ?? 0;
   }
 
   static bool _b(dynamic v, {bool fallback = false}) {
     if (v is bool) return v;
-    if (v is num) return v != 0;
-    final s = (v ?? '').toString().trim().toLowerCase();
-    if (s == 'true' || s == '1' || s == 'yes') return true;
-    if (s == 'false' || s == '0' || s == 'no') return false;
     return fallback;
   }
 
@@ -110,24 +74,20 @@ class OrderModel {
     return null;
   }
 
-  // ---------- from Firestore Document ----------
+  // ---------- from Firestore ----------
   factory OrderModel.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? <String, dynamic>{};
     return OrderModel.fromMap(doc.id, data);
   }
 
-  // ---------- from Map ----------
   factory OrderModel.fromMap(String id, Map<String, dynamic> data) {
-    final bool accepted = _b(data['sellerAccepted'], fallback: false);
-    final bool rejected = _b(data['sellerRejected'], fallback: false);
-
     return OrderModel(
       id: id,
 
       productId: _s(data['productId']),
-      productName: _s(data['productName'] ?? data['name']),
-      productPrice: _s(data['productPrice'] ?? data['price']),
-      productImage: _s(data['productImage'] ?? data['image']),
+      productName: _s(data['productName']),
+      productPrice: _s(data['productPrice']),
+      productImage: _s(data['productImage']),
 
       sellerId: _s(data['sellerId']),
       sellerName: _s(data['sellerName']),
@@ -135,77 +95,52 @@ class OrderModel {
       buyerId: _s(data['buyerId']),
       buyerName: _s(data['buyerName']),
       buyerPhone: _s(data['buyerPhone']),
-      deliveryAddress: _s(data['deliveryAddress']),
+      buyerAddress: _s(data['buyerAddress']),
 
       quantity: _i(data['quantity']),
-      paymentMethod: _s(data['paymentMethod']),
       status: _s(data['status']),
 
-      sellerAccepted: accepted,
-      sellerRejected: rejected,
+      sellerAccepted: _b(data['sellerAccepted']),
+      sellerRejected: _b(data['sellerRejected']),
       sellerRejectReason: _s(data['sellerRejectReason']),
 
-      // ✅ payment proof
-      paymentTxId: _s(data['paymentTxId']),
-      paymentProofUrl: _s(data['paymentProofUrl']),
-      paymentProofStatus: _s(data['paymentProofStatus']),
-      paymentProofAt: _ts(data['paymentProofAt']),
-      paymentProofBy: _s(data['paymentProofBy']),
-
-      // ✅ drop stage (orders doc)
-      dropOtpUsed: _b(data['dropOtpUsed'], fallback: false),
-      dropOtpCreatedAt: _ts(data['dropOtpCreatedAt']),
-
-      deliveryLinkUsed: _b(data['deliveryLinkUsed'], fallback: false),
-      deliveryLinkCreatedAt: _ts(data['deliveryLinkCreatedAt']),
-
-      // ✅ delivered audit (orders doc)
-      deliveredAt: _ts(data['deliveredAt']),
-      deliveredBy: _s(data['deliveredBy']),
+      depositAmount: _i(data['depositAmount']),
+      depositStatus: _s(data['depositStatus']),
+      depositCity: _s(data['depositCity']),
 
       createdAt: _ts(data['createdAt']),
+      updatedAt: _ts(data['updatedAt']),
     );
   }
 
-  // (optional) if you ever need to write map again later
   Map<String, dynamic> toMap() {
     return {
-      'productId': productId.trim(),
-      'productName': productName.trim(),
-      'productPrice': productPrice.trim(),
-      'productImage': productImage.trim(),
-      'sellerId': sellerId.trim(),
-      'sellerName': sellerName.trim(),
-      'buyerId': buyerId.trim(),
-      'buyerName': buyerName.trim(),
-      'buyerPhone': buyerPhone.trim(),
-      'deliveryAddress': deliveryAddress.trim(),
+      'productId': productId,
+      'productName': productName,
+      'productPrice': productPrice,
+      'productImage': productImage,
+
+      'sellerId': sellerId,
+      'sellerName': sellerName,
+
+      'buyerId': buyerId,
+      'buyerName': buyerName,
+      'buyerPhone': buyerPhone,
+      'buyerAddress': buyerAddress,
+
       'quantity': quantity,
-      'paymentMethod': paymentMethod.trim(),
-      'status': status.trim(),
+      'status': status,
 
       'sellerAccepted': sellerAccepted,
       'sellerRejected': sellerRejected,
-      'sellerRejectReason': sellerRejectReason.trim(),
+      'sellerRejectReason': sellerRejectReason,
 
-      // ✅ payment proof
-      'paymentTxId': paymentTxId.trim(),
-      'paymentProofUrl': paymentProofUrl.trim(),
-      'paymentProofStatus': paymentProofStatus.trim(),
-      'paymentProofAt': paymentProofAt,
-      'paymentProofBy': paymentProofBy.trim(),
-
-      // ✅ drop stage
-      'dropOtpUsed': dropOtpUsed,
-      'dropOtpCreatedAt': dropOtpCreatedAt,
-      'deliveryLinkUsed': deliveryLinkUsed,
-      'deliveryLinkCreatedAt': deliveryLinkCreatedAt,
-
-      // ✅ delivered audit
-      'deliveredAt': deliveredAt,
-      'deliveredBy': deliveredBy.trim(),
+      'depositAmount': depositAmount,
+      'depositStatus': depositStatus,
+      'depositCity': depositCity,
 
       'createdAt': createdAt,
+      'updatedAt': updatedAt,
     };
   }
 }

@@ -4,27 +4,40 @@ import 'package:go_router/go_router.dart';
 import '../../data/models/order_model.dart';
 import '../../data/models/product_model.dart';
 import '../../data/services/admin_access_service.dart';
+
+import '../../features/admin/pages/admin_imei_reports_page.dart';
 import '../../features/admin/pages/admin_orders_page.dart';
 import '../../features/admin/pages/fix_phone_brands_page.dart';
 import '../../features/admin/pages/manage_models_page.dart';
 import '../../features/admin/pages/manage_phone_brands_page.dart';
+
 import '../../features/auth/pages/login_page.dart';
 import '../../features/auth/pages/signup_page.dart';
 import '../../features/auth/pages/splash_page.dart';
+
+import '../../features/orders/pages/admin_order_detail_page.dart';
+import '../../features/orders/pages/buyer_order_detail_page.dart';
 import '../../features/orders/pages/buyer_orders_page.dart';
-import '../../features/orders/pages/order_detail_page.dart';
 import '../../features/orders/pages/order_form_page.dart';
 import '../../features/orders/pages/orders_hub_page.dart';
+import '../../features/orders/pages/seller_order_detail_page.dart';
 import '../../features/orders/pages/seller_orders_page.dart';
-import '../../features/auth/pages/otp_verify_page.dart';
+
 import '../../features/products/pages/add_product_page.dart';
 import '../../features/products/pages/brand_collection_page.dart';
 import '../../features/products/pages/edit_product_page.dart';
 import '../../features/products/pages/home_page.dart';
+import '../../features/products/pages/model_list_page.dart';
+import '../../features/products/pages/model_listings_page.dart';
 import '../../features/products/pages/product_detail_route_page.dart';
+
+import '../../features/products/pages/seller_model_list_page.dart';
+import '../../features/products/pages/seller_product_listings_page.dart';
+import '../../features/products/pages/seller_wall_page.dart';
 import '../../features/profile/pages/edit_profile_page.dart';
 import '../../features/profile/pages/notifications_page.dart';
 import '../../features/profile/pages/profile_page.dart';
+
 import 'app_routes.dart';
 import 'auth_refresh_listenable.dart';
 import 'app_navigator_keys.dart';
@@ -35,12 +48,10 @@ final GoRouter appRouter = GoRouter(
   refreshListenable:
   AuthRefreshListenable(FirebaseAuth.instance.authStateChanges()),
 
-  // ================= REDIRECT LOGIC =================
+  // ================= REDIRECT =================
   redirect: (context, state) async {
     final user = FirebaseAuth.instance.currentUser;
-    final location = state.uri.path; // ✅ FIXED
-
-    print("Redirect check → $location");
+    final location = state.uri.path;
 
     // ===== Not Logged In =====
     if (user == null) {
@@ -67,12 +78,12 @@ final GoRouter appRouter = GoRouter(
       AppRoutes.manageBrands,
       AppRoutes.manageModels,
       AppRoutes.fixPhoneBrands,
+      AppRoutes.adminImeiReports,
     };
 
     if (adminPaths.any((path) => location.startsWith(path))) {
       final ok = await AdminAccessService.instance.isAdmin(user.uid);
       if (!ok) {
-        print("❌ Not admin → redirect home");
         return AppRoutes.home;
       }
     }
@@ -82,6 +93,8 @@ final GoRouter appRouter = GoRouter(
 
   // ================= ROUTES =================
   routes: [
+
+    // ---------- Splash / Auth ----------
     GoRoute(
       path: AppRoutes.splash,
       builder: (context, state) => const SplashPage(),
@@ -99,7 +112,7 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const SignupPage(),
     ),
 
-    // ===== Product Detail =====
+    // ---------- Product Detail ----------
     GoRoute(
       path: AppRoutes.product,
       builder: (context, state) {
@@ -118,7 +131,7 @@ final GoRouter appRouter = GoRouter(
       },
     ),
 
-    // ===== Orders =====
+    // ---------- Orders ----------
     GoRoute(
       path: AppRoutes.ordersHub,
       builder: (context, state) => const OrdersHubPage(),
@@ -136,7 +149,55 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const AdminOrdersPage(),
     ),
 
-    // ===== Profile =====
+    // ---------- Order Form ----------
+    GoRoute(
+      path: AppRoutes.orderForm,
+      builder: (context, state) {
+        final extra = state.extra;
+        final map = extra is Map<String, dynamic> ? extra : const {};
+
+        final product = map['product'] as Product?;
+        final sellerName =
+        (map['sellerName'] ?? '').toString();
+
+        if (product == null) {
+          return const SplashPage();
+        }
+
+        return OrderFormPage(
+          product: product,
+          sellerName: sellerName,
+        );
+      },
+    ),
+
+    // ---------- Order Detail ----------
+    // ---------- Order Detail ----------
+    GoRoute(
+      path: AppRoutes.orderDetail,
+      builder: (context, state) {
+        final extra = state.extra;
+        final map = extra is Map<String, dynamic> ? extra : const {};
+
+        final order = map['order'] as OrderModel?;
+
+        if (order == null) {
+          return const SplashPage();
+        }
+
+        final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+
+        if (uid == order.buyerId) {
+          return BuyerOrderDetailPage(order: order);
+        } else if (uid == order.sellerId) {
+          return SellerOrderDetailPage(order: order);
+        } else {
+          return AdminOrderDetailPage(order: order);
+        }
+      },
+    ),
+
+    // ---------- Profile ----------
     GoRoute(
       path: AppRoutes.profile,
       builder: (context, state) => const ProfilePage(),
@@ -158,7 +219,7 @@ final GoRouter appRouter = GoRouter(
       },
     ),
 
-    // ===== Products =====
+    // ---------- Products ----------
     GoRoute(
       path: AppRoutes.addProduct,
       builder: (context, state) => const AddProductPage(),
@@ -171,7 +232,16 @@ final GoRouter appRouter = GoRouter(
       },
     ),
 
-    // ===== Admin =====
+    GoRoute(
+      path: AppRoutes.brandCollection,
+      builder: (context, state) {
+        final raw = state.pathParameters['brand'] ?? '';
+        final brand = Uri.decodeComponent(raw);
+        return BrandCollectionPage(brand: brand);
+      },
+    ),
+
+    // ---------- Admin ----------
     GoRoute(
       path: AppRoutes.manageBrands,
       builder: (context, state) =>
@@ -187,56 +257,38 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) =>
       const FixPhoneBrandsPage(),
     ),
-
-    // ===== Orders Detail =====
     GoRoute(
-      path: AppRoutes.orderForm,
+      path: AppRoutes.adminImeiReports,
+      builder: (context, state) =>
+      const AdminImeiReportsPage(),
+    ),
+
+    // ---------- Notifications ----------
+    GoRoute(
+      path: AppRoutes.notifications,
+      builder: (context, state) =>
+      const NotificationsPage(),
+    ),
+    GoRoute(
+      path: "/model-list",
       builder: (context, state) {
-        final extra = state.extra;
-        final map = extra is Map<String, dynamic> ? extra : const {};
-        final product = map['product'] as Product?;
-        final sellerName =
-        (map['sellerName'] ?? '').toString();
-
-        if (product == null) {
-          return const SplashPage();
-        }
-
-        return OrderFormPage(
-          product: product,
-          sellerName: sellerName,
+        final map = state.extra as Map<String, dynamic>;
+        return ModelListPage(
+          brand: map['brand'],
+          deviceType: map['deviceType'],
         );
       },
     ),
 
     GoRoute(
-      path: AppRoutes.orderDetail,
+      path: "/model-listings",
       builder: (context, state) {
-        final extra = state.extra;
-        final map = extra is Map<String, dynamic> ? extra : const {};
-        final order = map['order'] as OrderModel?;
-
-        if (order == null) {
-          return const SplashPage();
-        }
-
-        return OrderDetailPage(order: order);
+        final map = state.extra as Map<String, dynamic>;
+        return ModelListingsPage(
+          brand: map['brand'],
+          model: map['model'],
+        );
       },
-    ),
-
-    GoRoute(
-      path: AppRoutes.pickupOtp,
-      builder: (context, state) {
-        final id = state.pathParameters['id'] ?? '';
-        return PickupOtpVerifyPage(orderId: id);
-      },
-    ),
-
-    // ===== Misc =====
-    GoRoute(
-      path: AppRoutes.notifications,
-      builder: (context, state) =>
-      const NotificationsPage(),
     ),
     GoRoute(
       path: AppRoutes.brandCollection,
@@ -244,6 +296,38 @@ final GoRouter appRouter = GoRouter(
         final raw = state.pathParameters['brand'] ?? '';
         final brand = Uri.decodeComponent(raw);
         return BrandCollectionPage(brand: brand);
+      },
+    ),
+    GoRoute(
+      path: AppRoutes.sellerWall,
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>;
+
+        return SellerWallPage(
+          sellerId: extra["sellerId"],
+        );
+      },
+    ),
+    GoRoute(
+      path: '/seller-models',
+      builder: (context, state) {
+        final extra = state.extra as Map;
+        return SellerModelListPage(
+          sellerId: extra['sellerId'],
+          brand: extra['brand'],
+        );
+      },
+    ),
+    GoRoute(
+      path: '/seller-products',
+      builder: (context, state) {
+        final extra = state.extra as Map;
+
+        return SellerProductListingsPage(
+          sellerId: extra['sellerId'],
+          brand: extra['brand'],
+          model: extra['model'],
+        );
       },
     ),
   ],

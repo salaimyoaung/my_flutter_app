@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../app_styles.dart';
 import '../../../data/services/brand_service.dart';
 import '../../../data/services/model_service.dart';
@@ -12,6 +13,9 @@ import '../../../core/router/app_routes.dart';
 import '../../../shared/widgets/brand_model_section.dart';
 import '../../../shared/widgets/product_image_picker.dart';
 import '../../../shared/widgets/specs_section.dart';
+import '../../../core/utils/imei_validator.dart';
+import 'dart:io';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class AddProductPage extends StatefulWidget {
   const AddProductPage({super.key});
@@ -27,12 +31,13 @@ class _AddProductPageState extends State<AddProductPage> {
   final StorageService _storageService = StorageService();
 
   late final Stream<List<String>> _brandsStream =
-      _brandService.streamActiveBrands();
+  _brandService.streamActiveBrands();
   late final Stream<List<PhoneModelEntry>> _modelsStream =
-      _modelService.streamPhoneModels();
+  _modelService.streamPhoneModels();
 
   final TextEditingController priceController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
+  final TextEditingController imeiController = TextEditingController(); // ✅ ADDED
   final TextEditingController detailController = TextEditingController();
   final TextEditingController brandController = TextEditingController();
   final TextEditingController modelController = TextEditingController();
@@ -53,7 +58,7 @@ class _AddProductPageState extends State<AddProductPage> {
   bool _isUploading = false;
   bool _isImageUploading = false;
   List<XFile> _pickedImages = [];
-
+  XFile? _imeiPhoto;
   static const List<String> conditions = [
     "Brand New",
     "Like New",
@@ -87,12 +92,32 @@ class _AddProductPageState extends State<AddProductPage> {
     if (_pickedImages.isEmpty) return "ပုံရွေးပေးပါ (Gallery)";
     if (priceController.text.trim().isEmpty) return "ဈေးနှုန်း ထည့်ပါ";
     if (phoneController.text.trim().isEmpty) return "ဖုန်းနံပါတ် ထည့်ပါ";
+
+    // ✅ Only require IMEI if NOT Brand New
+    if (selectedCondition != "Brand New") {
+      final imei = imeiController.text.trim();
+
+      if (imei.isEmpty) {
+        return "IMEI ထည့်ပါ (Used ဖုန်းအတွက်လိုအပ်သည်)";
+      }
+
+      if (!ImeiValidator.isValid(imei)) {
+        return "IMEI မမှန်ပါ (Invalid IMEI)";
+      }
+
+      // 🔥 ADD THIS HERE
+      if (_imeiPhoto == null) {
+        return "IMEI Live Photo ရိုက်ပါ";
+      }
+    }
+
     if (brandController.text.trim().isEmpty) return "Brand ထည့်ပါ (ရိုက်/ရွေး)";
     if (modelController.text.trim().isEmpty) return "Model ထည့်ပါ (ရိုက်/ရွေး)";
     if (selectedRam == null) return "RAM ရွေးပါ";
     if (selectedStorage == null) return "Storage ရွေးပါ";
     if (selectedBatteryPercent == null) return "Battery Health ရွေးပါ";
     if (selectedWarrantyDays == null) return "Warranty ရွေးပါ";
+
     return null;
   }
 
@@ -113,11 +138,14 @@ class _AddProductPageState extends State<AddProductPage> {
       return;
     }
 
+
     setState(() => _isUploading = true);
 
     try {
-      final userDoc =
-          await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
       final udata = userDoc.data() ?? {};
       final sellerName = (udata['name'] ?? "အမည်မသိရောင်းသူ").toString();
 
@@ -130,6 +158,18 @@ class _AddProductPageState extends State<AddProductPage> {
         throw Exception("No image uploaded");
       }
       final coverImage = imageUrls.first;
+      String? imeiPhotoUrl;
+
+      if (selectedCondition != "Brand New" && _imeiPhoto != null) {
+        final ref = FirebaseStorage.instance
+            .ref()
+            .child('imei_photos')
+            .child('${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+        await ref.putFile(File(_imeiPhoto!.path));
+        imeiPhotoUrl = await ref.getDownloadURL();
+      }
+
 
       final autoName = modelController.text.trim();
       final detail = detailController.text.trim();
@@ -138,11 +178,28 @@ class _AddProductPageState extends State<AddProductPage> {
       final brand = brandController.text.trim();
       final model = modelController.text.trim();
 
+      final imei = selectedCondition == "Brand New"
+          ? ""
+          : imeiController.text.trim();
+      if (selectedCondition != "Brand New") {
+        final exists = await _productService.isImeiAlreadyExists(imei);
+
+        if (exists) {
+          setState(() => _isUploading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("ဒီ IMEI နဲ့ ဖုန်းတစ်လုံး ရှိပြီးသားဖြစ်ပါတယ်")),
+          );
+          return;
+        }
+      }
+
       await _productService.createProduct({
         'name': autoName,
         'detail': detail,
         'price': price,
         'phone': phone,
+        'imei': imei, // ✅ ADDED
+        'imeiPhoto': imeiPhotoUrl ?? "",
         'category': 'ဖုန်း',
         'deviceType': selectedDeviceType,
         'brand': brand,
@@ -191,6 +248,7 @@ class _AddProductPageState extends State<AddProductPage> {
   void dispose() {
     priceController.dispose();
     phoneController.dispose();
+    imeiController.dispose(); // ✅ ADDED
     detailController.dispose();
     brandController.dispose();
     modelController.dispose();
@@ -201,6 +259,7 @@ class _AddProductPageState extends State<AddProductPage> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final isLoggedIn = FirebaseAuth.instance.currentUser != null;
+
     return Scaffold(
       backgroundColor: AppColors.background(context),
       appBar: AppBar(
@@ -225,6 +284,13 @@ class _AddProductPageState extends State<AddProductPage> {
             _DeviceTypeConditionSection(
               selectedDeviceType: selectedDeviceType,
               selectedCondition: selectedCondition,
+              imeiController: imeiController,
+              imeiPhoto: _imeiPhoto,
+              onImeiPhotoPicked: (photo) {
+                setState(() {
+                  _imeiPhoto = photo;
+                });
+              },
               onDeviceTypeChanged: (v) {
                 if (v == null) return;
                 setState(() {
@@ -232,8 +298,15 @@ class _AddProductPageState extends State<AddProductPage> {
                   modelController.clear();
                 });
               },
-              onConditionChanged: (v) =>
-                  setState(() => selectedCondition = v ?? "Brand New"),
+              onConditionChanged: (v) {
+                setState(() {
+                  selectedCondition = v ?? "Brand New";
+                  if (selectedCondition == "Brand New") {
+                    imeiController.clear();
+                    _imeiPhoto = null;
+                  }
+                });
+              },
             ),
             SpecsSection(
               selectedRam: selectedRam,
@@ -247,6 +320,7 @@ class _AddProductPageState extends State<AddProductPage> {
               onBatteryChanged: (v) => setState(() => selectedBatteryPercent = v),
               onWarrantyChanged: (v) => setState(() => selectedWarrantyDays = v),
             ),
+
             TextField(
               controller: priceController,
               keyboardType: TextInputType.number,
@@ -256,6 +330,7 @@ class _AddProductPageState extends State<AddProductPage> {
               ),
             ),
             const SizedBox(height: 15),
+
             TextField(
               controller: phoneController,
               keyboardType: TextInputType.phone,
@@ -266,6 +341,7 @@ class _AddProductPageState extends State<AddProductPage> {
               ),
             ),
             const SizedBox(height: 15),
+
             BrandModelSection(
               brandsStream: _brandsStream,
               modelsStream: _modelsStream,
@@ -276,14 +352,13 @@ class _AddProductPageState extends State<AddProductPage> {
                 modelController.clear();
                 setState(() {});
               },
-              onModelChanged: () {
-                setState(() {});
-              },
+              onModelChanged: () => setState(() {}),
               onModelInputChanged: () {
                 setState(() {});
                 _maybeAutoFillRam();
               },
             ),
+
             const SizedBox(height: 14),
             TextField(
               controller: detailController,
@@ -296,6 +371,7 @@ class _AddProductPageState extends State<AddProductPage> {
               ),
             ),
             const SizedBox(height: 15),
+
             _SubmitSection(
               isUploading: _isUploading,
               isImageUploading: _isImageUploading,
@@ -310,25 +386,25 @@ class _AddProductPageState extends State<AddProductPage> {
       ),
       bottomNavigationBar: !isLoggedIn
           ? Container(
-              color: Colors.black87,
-              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Expanded(
-                    child:
-                        Text("အကောင့်မဝင်ရသေးပါ", style: TextStyle(color: Colors.white)),
-                  ),
-                  const SizedBox(width: 10),
-                  ElevatedButton(
-                    onPressed: () {
-                      context.go(AppRoutes.signup);
-                    },
-                    child: const Text("ဝင်ရန် / အကောင့်ဖွင့်ရန်"),
-                  ),
-                ],
+        color: Colors.black87,
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Expanded(
+              child: Text(
+                "အကောင့်မဝင်ရသေးပါ",
+                style: TextStyle(color: Colors.white),
               ),
-            )
+            ),
+            const SizedBox(width: 10),
+            ElevatedButton(
+              onPressed: () => context.go(AppRoutes.signup),
+              child: const Text("ဝင်ရန် / အကောင့်ဖွင့်ရန်"),
+            ),
+          ],
+        ),
+      )
           : null,
     );
   }
@@ -339,12 +415,18 @@ class _DeviceTypeConditionSection extends StatelessWidget {
   final String selectedCondition;
   final ValueChanged<String?> onDeviceTypeChanged;
   final ValueChanged<String?> onConditionChanged;
+  final TextEditingController imeiController;
+  final XFile? imeiPhoto;
+  final Function(XFile) onImeiPhotoPicked;
 
   const _DeviceTypeConditionSection({
     required this.selectedDeviceType,
     required this.selectedCondition,
     required this.onDeviceTypeChanged,
     required this.onConditionChanged,
+    required this.imeiController,
+    required this.imeiPhoto,
+    required this.onImeiPhotoPicked,
   });
 
   @override
@@ -358,10 +440,22 @@ class _DeviceTypeConditionSection extends StatelessWidget {
             border: OutlineInputBorder(),
           ),
           items: const [
-            DropdownMenuItem(value: _AddProductPageState.dtAndroidPhone, child: Text("Android Phone")),
-            DropdownMenuItem(value: _AddProductPageState.dtAndroidTablet, child: Text("Android Tablet")),
-            DropdownMenuItem(value: _AddProductPageState.dtIphone, child: Text("iPhone")),
-            DropdownMenuItem(value: _AddProductPageState.dtIpad, child: Text("iPad")),
+            DropdownMenuItem(
+              value: _AddProductPageState.dtAndroidPhone,
+              child: Text("Android Phone"),
+            ),
+            DropdownMenuItem(
+              value: _AddProductPageState.dtAndroidTablet,
+              child: Text("Android Tablet"),
+            ),
+            DropdownMenuItem(
+              value: _AddProductPageState.dtIphone,
+              child: Text("iPhone"),
+            ),
+            DropdownMenuItem(
+              value: _AddProductPageState.dtIpad,
+              child: Text("iPad"),
+            ),
           ],
           onChanged: onDeviceTypeChanged,
         ),
@@ -378,6 +472,48 @@ class _DeviceTypeConditionSection extends StatelessWidget {
           onChanged: onConditionChanged,
         ),
         const SizedBox(height: 15),
+
+        if (selectedCondition != "Brand New") ...[
+          TextField(
+            controller: imeiController,
+            keyboardType: TextInputType.number,
+            maxLength: 15,
+            decoration: const InputDecoration(
+              labelText: "IMEI (15 digits)",
+              prefixIcon: Icon(Icons.confirmation_number),
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          ElevatedButton.icon(
+            icon: const Icon(Icons.camera_alt),
+            label: Text(
+              imeiPhoto == null
+                  ? "IMEI Live Photo ရိုက်ပါ"
+                  : "IMEI Photo ပြန်ရိုက်ရန်",
+            ),
+            onPressed: () async {
+              final picker = ImagePicker();
+              final photo = await picker.pickImage(
+                source: ImageSource.camera,
+                imageQuality: 80,
+              );
+              if (photo != null) {
+                onImeiPhotoPicked(photo);
+              }
+            },
+          ),
+
+          if (imeiPhoto != null) ...[
+            const SizedBox(height: 8),
+            Image.file(
+              File(imeiPhoto!.path),
+              height: 120,
+            ),
+          ],
+          const SizedBox(height: 15),
+        ],
       ],
     );
   }
@@ -399,9 +535,8 @@ class _SubmitSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    if (isUploading) {
-      return const CircularProgressIndicator();
-    }
+    if (isUploading) return const CircularProgressIndicator();
+
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(

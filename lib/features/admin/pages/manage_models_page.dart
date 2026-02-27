@@ -11,6 +11,7 @@ class ManageModelsPage extends StatefulWidget {
 }
 
 class _ManageModelsPageState extends State<ManageModelsPage> {
+  late final TextEditingController _seriesCtrl;
   // =========================
   // Device Types (same as AddProductPage / ProductsPage)
   // =========================
@@ -69,6 +70,7 @@ class _ManageModelsPageState extends State<ManageModelsPage> {
   @override
   void initState() {
     super.initState();
+    _seriesCtrl = TextEditingController();
     _brandCtrl = TextEditingController();
     _modelCtrl = TextEditingController();
     _searchCtrl = TextEditingController();
@@ -76,6 +78,7 @@ class _ManageModelsPageState extends State<ManageModelsPage> {
 
   @override
   void dispose() {
+    _seriesCtrl.dispose();
     _brandCtrl.dispose();
     _modelCtrl.dispose();
     _searchCtrl.dispose();
@@ -145,6 +148,7 @@ class _ManageModelsPageState extends State<ManageModelsPage> {
     required String deviceType,
     required String brand,
     required String model,
+    required String series,
   }) async {
     final dt = deviceType.trim();
     final b = _cleanBrand(brand);
@@ -176,6 +180,7 @@ class _ManageModelsPageState extends State<ManageModelsPage> {
         "brand": b,
         "model": m,
         "active": true,
+        "series": series.trim(),
         "updatedAt": FieldValue.serverTimestamp(),
         "createdAt": FieldValue.serverTimestamp(),
       },
@@ -380,6 +385,15 @@ class _ManageModelsPageState extends State<ManageModelsPage> {
                         refreshDialog();
                       },
                     ),
+                    const SizedBox(height: 12),
+
+                    TextField(
+                      controller: _seriesCtrl,
+                      decoration: const InputDecoration(
+                        labelText: "Series (e.g. Galaxy S / Pro / Mate)",
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -393,6 +407,7 @@ class _ManageModelsPageState extends State<ManageModelsPage> {
                 onPressed: () async {
                   final brand = _brandCtrl.text.trim();
                   final model = _modelCtrl.text.trim();
+                  final series = _seriesCtrl.text.trim();
 
                   if (brand.isEmpty || model.isEmpty) {
                     if (!mounted) return;
@@ -409,7 +424,12 @@ class _ManageModelsPageState extends State<ManageModelsPage> {
                   }
 
                   try {
-                    await _upsertModel(deviceType: dt, brand: brand, model: model);
+                    await _upsertModel(
+                      deviceType: dt,
+                      brand: brand,
+                      model: model,
+                      series: series,
+                    );
                     if (!mounted) return;
 
                     Navigator.pop(dialogCtx);
@@ -538,23 +558,25 @@ class _ManageModelsPageState extends State<ManageModelsPage> {
                     ),
                     const SizedBox(height: 10),
 
-                    const SizedBox(height: 12),
 
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.auto_fix_high),
-                      label: const Text("Fix Phone Brands (Admin)"),
-                      onPressed: () {
-                        context.push(AppRoutes.fixPhoneBrands);
-                      },
-                    ),
 
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: ElevatedButton.icon(
-                        onPressed: () => _openAddDialog(computed),
-                        icon: const Icon(Icons.add),
-                        label: const Text("Add Model"),
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.auto_fix_high),
+                          label: const Text("Fix Phone Brands (Admin)"),
+                          onPressed: () {
+                            context.push(AppRoutes.fixPhoneBrands);
+                          },
+                        ),
+                        const SizedBox(width: 20),
+                        ElevatedButton.icon(
+                          onPressed: () => _openAddDialog(computed),
+                          icon: const Icon(Icons.add),
+                          label: const Text("Add Model"),
+                        ),
+                      ],
                     ),
                   ],
                 ),
