@@ -11,6 +11,8 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
+node_modules/
+**/node_modules/
 
 # IntelliJ related
 *.iml
@@ -31,6 +33,12 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+**/build/
+android/app/build/
+android/.gradle/
+android/.cxx/
+ios/Pods/
+ios/.symlinks/
 /coverage/
 
 # Symbolication related
@@ -43,3 +51,24 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+*.apk
+*.aab
+*.so
+
+# Secrets and Keys
+serviceAccountKey.json
+**/serviceAccountKey*.json
+*.env
+!.env.example
+*.keystore
+*.jks
+*.p12
+*.pem
+key.properties
+key.properties.save
+
+# Installers and temporary artifacts
+*.pkg
+*.dmg
+.artifacts/
+

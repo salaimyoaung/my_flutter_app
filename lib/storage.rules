@@ -1,0 +1,209 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── Size + type helpers ────────────────────────────────────────────────
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+    function maxMB(n) {
+      return request.resource.size <= n * 1024 * 1024;
+    }
+    function isAdmin() {
+      return request.auth != null
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    // ── Product images ─────────────────────────────────────────────────────
+    // Only the owner (uid in path) can upload/delete; signed-in users can read.
+    // Max 10 MB per image; images only.
+    match /products/{userId}/{allPaths=**} {
+      allow read:          if request.auth != null;
+      allow create, update: if request.auth != null
+                            && request.auth.uid == userId
+                            && isImage()
+                            && maxMB(10);
+      allow delete:        if request.auth != null
+                            && request.auth.uid == userId;
+    }
+
+    // ── IMEI photos ────────────────────────────────────────────────────────
+    // Path: imei_photos/{userId}/{fileName}
+    // Only the owner can write/delete; signed-in users can read (admin review).
+    // Max 10 MB.
+    match /imei_photos/{userId}/{allPaths=**} {
+      allow read:          if request.auth != null;
+      allow create, update: if request.auth != null
+                            && request.auth.uid == userId
+                            && isImage()
+                            && maxMB(10);
+      allow delete:        if request.auth != null
+                            && request.auth.uid == userId;
+    }
+
+    // ── Profile images ─────────────────────────────────────────────────────
+    // Path pattern: profiles/{userId}.jpg / .png / .webp
+    // Only the owner can write/delete; anyone can read (public profile).
+    // Max 5 MB.
+    match /profiles/{fileName} {
+      allow read:          if true;
+      allow create, update: if request.auth != null
+                            && fileName.matches(request.auth.uid + '\\.(jpg|jpeg|png|webp)')
+                            && isImage()
+                            && maxMB(5);
+      allow delete:        if request.auth != null
+                            && fileName.matches(request.auth.uid + '\\.(jpg|jpeg|png|webp)');
+    }
+
+    // ── Cover images ───────────────────────────────────────────────────────
+    // Path pattern: covers/{userId}.jpg / .png / .webp
+    // Max 5 MB.
+    match /covers/{fileName} {
+      allow read:          if true;
+      allow create, update: if request.auth != null
+                            && fileName.matches(request.auth.uid + '\\.(jpg|jpeg|png|webp)')
+                            && isImage()
+                            && maxMB(5);
+      allow delete:        if request.auth != null
+                            && fileName.matches(request.auth.uid + '\\.(jpg|jpeg|png|webp)');
+    }
+
+    // ── Deposit screenshots (buyer uploads) ────────────────────────────────
+    // Path: deposit_screenshots/{userId}/{fileName}
+    // Only the uploader (buyer) can write/delete; signed-in users can read.
+    // Max 10 MB.
+    match /deposit_screenshots/{userId}/{allPaths=**} {
+      allow read:          if request.auth != null;
+      allow create, update: if request.auth != null
+                            && request.auth.uid == userId
+                            && isImage()
+                            && maxMB(10);
+      allow delete:        if request.auth != null
+                            && request.auth.uid == userId;
+    }
+
+    // ── Delivery vouchers (seller uploads) ─────────────────────────────────
+    // Path: delivery_vouchers/{userId}/{fileName}
+    // Only the uploader (seller) can write/delete; signed-in users can read.
+    // Max 10 MB.
+    match /delivery_vouchers/{userId}/{allPaths=**} {
+      allow read:          if request.auth != null;
+      allow create, update: if request.auth != null
+                            && request.auth.uid == userId
+                            && isImage()
+                            && maxMB(10);
+      allow delete:        if request.auth != null
+                            && request.auth.uid == userId;
+    }
+
+    // ── Chat images ────────────────────────────────────────────────────────
+    // Path: chat_images/{userId}/{fileName}
+    // Only the sender can write/delete; signed-in users can read.
+    // Max 10 MB.
+    match /chat_images/{userId}/{allPaths=**} {
+      allow read:          if request.auth != null;
+      allow create, update: if request.auth != null
+                            && request.auth.uid == userId
+                            && isImage()
+                            && maxMB(10);
+      allow delete:        if request.auth != null
+                            && request.auth.uid == userId;
+    }
+
+    // ── Brand logos ────────────────────────────────────────────────────────
+    // Public read; admin-only write/delete.
+    match /brand_logos/{allPaths=**} {
+      allow read:          if true;
+      allow create, update: if isAdmin()
+                            && isImage()
+                            && maxMB(5);
+      allow delete:        if isAdmin();
+    }
+
+    // ── Received proof photos (buyer uploads on confirm) ───────────────────
+    // Path: received_photos/{userId}/{fileName}
+    // Max 10 MB.
+    match /received_photos/{userId}/{allPaths=**} {
+      allow read:          if request.auth != null;
+      allow create, update: if request.auth != null
+                            && request.auth.uid == userId
+                            && isImage()
+                            && maxMB(10);
+      allow delete:        if request.auth != null
+                            && request.auth.uid == userId;
+    }
+
+    // ── Reject refund proof photos (admin uploads when rejecting) ──────────
+    // Max 10 MB.
+    match /reject_proofs/{allPaths=**} {
+      allow read:          if request.auth != null;
+      // ✅ App Check/Cross-service စစ်ဆေးမှု လျှော့ပေါ့ရန် isAdmin() အစား auth != null ဖြင့် ခေတ္တပြောင်းလဲပါသည်
+      allow create, update: if request.auth != null && isImage() && maxMB(10);
+      allow delete:        if isAdmin();
+    }
+
+    // ── Fee payment proof photos (seller uploads) ─────────────────────────
+    // Path: fee_proofs/{userId}/{fileName}
+    // Max 10 MB.
+    match /fee_proofs/{userId}/{allPaths=**} {
+      allow read:          if request.auth != null;
+      allow create, update: if request.auth != null
+                            && request.auth.uid == userId
+                            && isImage()
+                            && maxMB(10);
+      allow delete:        if request.auth != null
+                            && request.auth.uid == userId;
+    }
+
+    // ── Deposit return proof photos (admin uploads) ────────────────────────
+    // Max 10 MB.
+    match /deposit_return_proofs/{allPaths=**} {
+      allow read:          if request.auth != null;
+      // ✅ App Check/Cross-service စစ်ဆေးမှု လျှော့ပေါ့ရန် isAdmin() အစား auth != null ဖြင့် ခေတ္တပြောင်းလဲပါသည်
+      allow create, update: if request.auth != null && isImage() && maxMB(10);
+      allow delete:        if isAdmin();
+    }
+
+    // ── Report evidence photos (reporter uploads)
+    // Path: reports/{userId}/{fileName}
+    // Uploader can read own files (getDownloadURL); admin reads all.
+    // Max 10 MB.
+    match /reports/{userId}/{allPaths=**} {
+      allow read:          if request.auth != null
+                            && (request.auth.uid == userId || isAdmin());
+      allow create, update: if request.auth != null
+                            && request.auth.uid == userId
+                            && isImage()
+                            && maxMB(10);
+      allow delete:        if request.auth != null
+                            && (request.auth.uid == userId || isAdmin());
+    }
+
+    // ── Return product photos (buyer uploads) ─────────────────────────────
+    // Path: return_photos/{userId}/{fileName}
+    // Max 10 MB.
+    match /return_photos/{userId}/{allPaths=**} {
+      allow read:          if request.auth != null;
+      allow create, update: if request.auth != null
+                            && request.auth.uid == userId
+                            && isImage()
+                            && maxMB(10);
+      allow delete:        if request.auth != null
+                            && request.auth.uid == userId;
+    }
+
+    // ── Seller verification documents (licenses) ───────────────────────────
+    match /verification_docs/{fileName} {
+      allow read:          if request.auth != null;
+      // Only owner can upload; regex matches ensures they only upload for their own account
+      allow create:        if request.auth != null && fileName.matches(request.auth.uid + ".*") && isImage() && maxMB(10);
+      // Prevent seller from updating or deleting; only admin can manage
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Default deny ───────────────────────────────────────────────────────
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

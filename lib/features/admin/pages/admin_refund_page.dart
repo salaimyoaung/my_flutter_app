@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../../../app_styles.dart';
+import 'package:sigmamoby/core/widgets/brand_app_bar.dart';
 
 class AdminRefundPage extends StatelessWidget {
   const AdminRefundPage({super.key});
@@ -18,13 +18,11 @@ class AdminRefundPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      backgroundColor: AppColors.background(context),
-      appBar: AppBar(
-        title: const Text("Admin Refund Panel"),
-      ),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: BrandAppBar(title: "Admin Refund Panel"),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('orders')
@@ -69,10 +67,7 @@ class AdminRefundPage extends StatelessWidget {
 
                       Text(
                         product,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
+                        style: textTheme.titleMedium,
                       ),
 
                       const SizedBox(height: 8),
@@ -86,9 +81,6 @@ class AdminRefundPage extends StatelessWidget {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                          ),
                           onPressed: () async {
                             await _markRefunded(doc.id);
 

@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../app_styles.dart';
+import 'package:sigmamoby/core/widgets/brand_app_bar.dart';
 
 class AdminDepositApprovePage extends StatelessWidget {
   const AdminDepositApprovePage({super.key});
@@ -30,13 +31,9 @@ class AdminDepositApprovePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
     return Scaffold(
       backgroundColor: AppColors.background(context),
-      appBar: AppBar(
-        title: const Text("Deposit Approval"),
-      ),
+      appBar: BrandAppBar(title: "Deposit Approval"),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('orders')
@@ -111,7 +108,8 @@ class AdminDepositApprovePage extends StatelessWidget {
                           Expanded(
                             child: ElevatedButton(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
+                                backgroundColor: Theme.of(context).colorScheme.tertiary,
+                                foregroundColor: Theme.of(context).colorScheme.onTertiary,
                               ),
                               onPressed: () async {
                                 await _updateStatus(
@@ -129,7 +127,8 @@ class AdminDepositApprovePage extends StatelessWidget {
                           Expanded(
                             child: ElevatedButton(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red,
+                                backgroundColor: Theme.of(context).colorScheme.error,
+                                foregroundColor: Theme.of(context).colorScheme.onError,
                               ),
                               onPressed: () async {
                                 await _updateStatus(

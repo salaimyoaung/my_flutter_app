@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sigmamoby/core/widgets/brand_app_bar.dart';
 
 class SellerModelListPage extends StatefulWidget {
   final String sellerId;
@@ -29,7 +30,7 @@ class _SellerModelListPageState
         .where('brand', isEqualTo: widget.brand);
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.brand)),
+      appBar: BrandAppBar(title: widget.brand),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: query.snapshots(),
         builder: (context, snap) {

@@ -17,10 +17,7 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -49,12 +46,29 @@ class DefaultFirebaseOptions {
     }
   }
 
+  // ── Web ─────────────────────────────────────────────────────────────────────
+  // Firebase console → Project Settings → Your apps → Web app
+  // ⚠️  apiKey နဲ့ appId ကို Firebase Console မှာ Web app register လုပ်ပြီး ဖြည့်ပါ
+
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyDsslolCZkKWh2dnROt7crwKL6yNNmUFqg',
+    appId: '1:933278906970:web:6e150bd0700d23f0417663',
+    messagingSenderId: '933278906970',
+    projectId: 'e-commence-app-4eafb',
+    authDomain: 'e-commence-app-4eafb.firebaseapp.com',
+    storageBucket: 'e-commence-app-4eafb.firebasestorage.app',
+    measurementId: 'G-13HJT4N0WY',
+  );
+
+  // ⚠️  သို့မဟုတ် terminal မှာ `flutterfire configure --platforms=web` run ပါ
+
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyDlAb3t_D1E2pCGCD4RoS0ljQ9dNCNzkBU',
-    appId: '1:933278906970:android:45e664d4d70aee6f417663',
+    appId: '1:933278906970:android:56e4dd4add60bde8417663',
     messagingSenderId: '933278906970',
     projectId: 'e-commence-app-4eafb',
     storageBucket: 'e-commence-app-4eafb.firebasestorage.app',
+    databaseURL: 'https://e-commence-app-4eafb-default-rtdb.asia-southeast1.firebasedatabase.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
@@ -63,6 +77,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '933278906970',
     projectId: 'e-commence-app-4eafb',
     storageBucket: 'e-commence-app-4eafb.firebasestorage.app',
-    iosBundleId: 'com.example.realproject',
+    databaseURL: 'https://e-commence-app-4eafb-default-rtdb.asia-southeast1.firebasedatabase.app',
+    iosBundleId: 'com.sigmamoby.app',
   );
 }

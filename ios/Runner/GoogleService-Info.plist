@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CLIENT_ID</key>
+	<string>933278906970-mqhgobms6tco6r6dir9q09eckdkq27on.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.933278906970-mqhgobms6tco6r6dir9q09eckdkq27on</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>933278906970-dh10u26ifgq6fati3pv73lr8s1786ql3.apps.googleusercontent.com</string>
 	<key>API_KEY</key>
 	<string>AIzaSyD33u7uPYUxiVIYkCykTMLUhbxBNuyjjr0</string>
 	<key>GCM_SENDER_ID</key>
@@ -9,7 +15,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.example.realproject</string>
+	<string>com.sigmamoby.app</string>
 	<key>PROJECT_ID</key>
 	<string>e-commence-app-4eafb</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +31,8 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:933278906970:ios:b566dc3b4a02e35c417663</string>
+	<string>1:933278906970:ios:ffb0689caab1b856417663</string>
+	<key>DATABASE_URL</key>
+	<string>https://e-commence-app-4eafb-default-rtdb.asia-southeast1.firebasedatabase.app</string>
 </dict>
 </plist>

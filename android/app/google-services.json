@@ -1,6 +1,7 @@
 {
   "project_info": {
     "project_number": "933278906970",
+    "firebase_url": "https://e-commence-app-4eafb-default-rtdb.asia-southeast1.firebasedatabase.app",
     "project_id": "e-commence-app-4eafb",
     "storage_bucket": "e-commence-app-4eafb.firebasestorage.app"
   },
@@ -12,7 +13,28 @@
           "package_name": "com.example.realproject"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "933278906970-dh10u26ifgq6fati3pv73lr8s1786ql3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.realproject",
+            "certificate_hash": "cacf5b82efa9687d6ce0d2dbf825ee05be363808"
+          }
+        },
+        {
+          "client_id": "933278906970-eiid4frl9m02pj99mhe6amui5c9m3b9m.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.realproject",
+            "certificate_hash": "ad3a46a3248072579838ee17d3315b2b7a887723"
+          }
+        },
+        {
+          "client_id": "933278906970-nrduh6195alkacfcpbh4n9jdoeouoq0u.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDlAb3t_D1E2pCGCD4RoS0ljQ9dNCNzkBU"
@@ -20,7 +42,71 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "933278906970-nrduh6195alkacfcpbh4n9jdoeouoq0u.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "933278906970-9vkve7p38u5jgrh98g32e4ht75atjvkn.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.realproject"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:933278906970:android:56e4dd4add60bde8417663",
+        "android_client_info": {
+          "package_name": "com.sigmamoby.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "933278906970-j9slh8vsdp4e52up8p3t6p97tqfed97a.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sigmamoby.app",
+            "certificate_hash": "cacf5b82efa9687d6ce0d2dbf825ee05be363808"
+          }
+        },
+        {
+          "client_id": "933278906970-mkhvtme8ur2r7ces681bd76slkaqopp3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sigmamoby.app",
+            "certificate_hash": "ad3a46a3248072579838ee17d3315b2b7a887723"
+          }
+        },
+        {
+          "client_id": "933278906970-nrduh6195alkacfcpbh4n9jdoeouoq0u.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDlAb3t_D1E2pCGCD4RoS0ljQ9dNCNzkBU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "933278906970-nrduh6195alkacfcpbh4n9jdoeouoq0u.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "933278906970-9vkve7p38u5jgrh98g32e4ht75atjvkn.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.realproject"
+              }
+            }
+          ]
         }
       }
     }

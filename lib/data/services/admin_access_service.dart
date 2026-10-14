@@ -4,41 +4,53 @@ class AdminAccessService {
   AdminAccessService._();
   static final AdminAccessService instance = AdminAccessService._();
 
-  // Cache admin status in memory to avoid repeated reads
-  bool? _isAdminCache;
-  DateTime? _lastCheck;
+  // ✅ Cache admin status — avoids repeated Firestore reads on every route
+  bool? _cached;
+  DateTime? _cachedAt;
 
-  void clearCache() {
-    _isAdminCache = null;
-    _lastCheck = null;
-  }
+  // ✅ Cache valid for 5 minutes
+  static const Duration _cacheDuration = Duration(minutes: 5);
 
+  bool get _isCacheValid =>
+      _cached != null &&
+          _cachedAt != null &&
+          DateTime.now().difference(_cachedAt!) < _cacheDuration;
+
+  /// Returns true if the given uid has admin role.
+  /// Result is cached for [_cacheDuration] to reduce Firestore reads.
   Future<bool> isAdmin(String uid) async {
-    // Return cached if valid (e.g. < 5 min old)
-    if (_isAdminCache != null && _lastCheck != null) {
-      if (DateTime.now().difference(_lastCheck!).inMinutes < 5) {
-        return _isAdminCache!;
-      }
-    }
+    if (_isCacheValid) return _cached!;
 
     try {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+
       final data = doc.data();
       if (data == null) {
-        _isAdminCache = false;
+        _cached = false;
+        _cachedAt = DateTime.now();
         return false;
       }
 
+      // ✅ Single source of truth — role field only
+      // 'isAdmin' boolean field removed: not in Firestore rules, causes dual-maintenance
       final role = (data['role'] ?? '').toString().toLowerCase().trim();
-      final isAdminBool = data['isAdmin'] == true;
-      
-      final isReallyAdmin = (role == 'admin') || isAdminBool;
-      
-      _isAdminCache = isReallyAdmin;
-      _lastCheck = DateTime.now();
-      return isReallyAdmin;
-    } catch (e) {
+      final result = role == 'admin';
+
+      _cached = result;
+      _cachedAt = DateTime.now();
+      return result;
+    } catch (_) {
+      // On error, don't cache — allow retry on next call
       return false;
     }
+  }
+
+  /// Clear cache — call on logout or role change
+  void clear() {
+    _cached = null;
+    _cachedAt = null;
   }
 }

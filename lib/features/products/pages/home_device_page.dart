@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/router/app_routes.dart';
+import 'package:sigmamoby/core/widgets/brand_app_bar.dart';
 
 class HomeDevicePage extends StatelessWidget {
   const HomeDevicePage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
     return Scaffold(
-      appBar: AppBar(title: const Text("Devices")),
+      appBar: BrandAppBar(title: "Devices"),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -33,6 +32,7 @@ class HomeDevicePage extends StatelessWidget {
   Widget _deviceTile(BuildContext context,
       {required String title, required String deviceType}) {
     final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
     return InkWell(
       borderRadius: BorderRadius.circular(18),
@@ -51,10 +51,7 @@ class HomeDevicePage extends StatelessWidget {
         ),
         child: Text(
           title,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-          ),
+          style: textTheme.titleLarge,
         ),
       ),
     );

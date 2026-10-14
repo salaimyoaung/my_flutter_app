@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:sigmamoby/core/widgets/brand_app_bar.dart';
 
 class FixPhoneBrandsPage extends StatefulWidget {
   const FixPhoneBrandsPage({super.key});
@@ -105,7 +106,7 @@ class _FixPhoneBrandsPageState extends State<FixPhoneBrandsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Fix phone_brands")),
+      appBar: BrandAppBar(title: "Fix phone_brands"),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

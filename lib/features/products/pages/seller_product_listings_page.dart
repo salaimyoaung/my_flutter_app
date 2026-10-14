@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../../widgets/product_card.dart';
+import 'package:sigmamoby/core/widgets/brand_app_bar.dart';
 
 class SellerProductListingsPage extends StatelessWidget {
   final String sellerId;
@@ -27,7 +28,7 @@ class SellerProductListingsPage extends StatelessWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text("$brand - $model")),
+      appBar: BrandAppBar(title: "$brand - $model"),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: query.snapshots(),
         builder: (context, snap) {

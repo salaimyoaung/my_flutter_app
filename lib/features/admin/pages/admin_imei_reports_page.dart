@@ -1,9 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../../core/router/app_routes.dart';
+import '../../../core/widgets/brand_app_bar.dart';
 
 class AdminImeiReportsPage extends StatelessWidget {
   const AdminImeiReportsPage({super.key});
@@ -19,15 +18,7 @@ class AdminImeiReportsPage extends StatelessWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("IMEI Reports (Admin)"),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            context.pop();
-          },
-        ),
-      ),
+      appBar: BrandAppBar(title: "IMEI Reports (Admin)"),
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection('users')
@@ -95,7 +86,8 @@ class AdminImeiReportsPage extends StatelessWidget {
                               Expanded(
                                 child: ElevatedButton(
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.green,
+                                    backgroundColor: Theme.of(context).colorScheme.tertiary,
+                                    foregroundColor: Theme.of(context).colorScheme.onTertiary,
                                   ),
                                   onPressed: () => _approveReport(
                                       context, reportId, imei, reason),
@@ -106,7 +98,8 @@ class AdminImeiReportsPage extends StatelessWidget {
                               Expanded(
                                 child: ElevatedButton(
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.red,
+                                    backgroundColor: Theme.of(context).colorScheme.error,
+                                    foregroundColor: Theme.of(context).colorScheme.onError,
                                   ),
                                   onPressed: () =>
                                       _rejectReport(context, reportId),
@@ -159,6 +152,7 @@ class AdminImeiReportsPage extends StatelessWidget {
 
     await batch.commit();
 
+    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("IMEI Approved & Blacklisted")),
     );
@@ -176,6 +170,7 @@ class AdminImeiReportsPage extends StatelessWidget {
       'rejectedAt': FieldValue.serverTimestamp(),
     });
 
+    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Report Rejected")),
     );

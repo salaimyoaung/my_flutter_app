@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../../../app_styles.dart';
+import 'package:sigmamoby/core/widgets/brand_app_bar.dart';
 
 class AdminRefundHistoryPage extends StatelessWidget {
   const AdminRefundHistoryPage({super.key});
@@ -14,12 +14,11 @@ class AdminRefundHistoryPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      backgroundColor: AppColors.background(context),
-      appBar: AppBar(
-        title: const Text("Refund History"),
-      ),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: BrandAppBar(title: "Refund History"),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('orders')
@@ -27,7 +26,6 @@ class AdminRefundHistoryPage extends StatelessWidget {
             .orderBy('refundedAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
-
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -35,16 +33,13 @@ class AdminRefundHistoryPage extends StatelessWidget {
           final docs = snapshot.data!.docs;
 
           if (docs.isEmpty) {
-            return const Center(
-              child: Text("No Refund History"),
-            );
+            return const Center(child: Text("No Refund History"));
           }
 
           return ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: docs.length,
             itemBuilder: (context, index) {
-
               final doc = docs[index];
               final data = doc.data() as Map<String, dynamic>;
 
@@ -63,15 +58,8 @@ class AdminRefundHistoryPage extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-
                       // Product
-                      Text(
-                        product,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
+                      Text(product, style: textTheme.titleMedium),
 
                       const SizedBox(height: 8),
 
@@ -84,13 +72,16 @@ class AdminRefundHistoryPage extends StatelessWidget {
 
                       Row(
                         children: [
-                          const Icon(Icons.check_circle,
-                              size: 18, color: Colors.green),
+                          Icon(
+                            Icons.check_circle,
+                            size: 18,
+                            color: scheme.primary,
+                          ),
                           const SizedBox(width: 6),
                           Text(
                             "Refunded on: ${_formatDate(refundedAt)}",
-                            style: const TextStyle(
-                              color: Colors.green,
+                            style: textTheme.bodyMedium?.copyWith(
+                              color: scheme.primary,
                               fontWeight: FontWeight.w600,
                             ),
                           ),

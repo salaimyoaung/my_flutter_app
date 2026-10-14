@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../../../app_styles.dart';
+import 'package:sigmamoby/core/widgets/brand_app_bar.dart';
 
 class SellerListingPage extends StatefulWidget {
   final String brand;
@@ -74,15 +74,10 @@ class _SellerListingPageState extends State<SellerListingPage> {
       builder: (_) {
         return StatefulBuilder(
           builder: (context, setSheet) {
+            final textTheme = Theme.of(context).textTheme;
             Widget sectionTitle(String t) => Padding(
               padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
-              child: Text(
-                t,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+              child: Text(t, style: textTheme.labelLarge),
             );
 
             Widget chips(Set<String> all, Set<String> selected) {
@@ -91,9 +86,8 @@ class _SellerListingPageState extends State<SellerListingPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 18),
                   child: Text(
                     "No options",
-                    style: TextStyle(
-                      color: scheme.onSurface.withOpacity(0.55),
-                      fontSize: 13,
+                    style: textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurface.withValues(alpha: 0.55),
                     ),
                   ),
                 );
@@ -126,15 +120,16 @@ class _SellerListingPageState extends State<SellerListingPage> {
                           color: isOn ? scheme.primary : scheme.surface,
                           borderRadius: BorderRadius.circular(999),
                           border: Border.all(
-                            color: isOn ? scheme.primary : scheme.outlineVariant,
+                            color: isOn
+                                ? scheme.primary
+                                : scheme.outlineVariant,
                           ),
                         ),
                         child: Text(
                           x,
-                          style: TextStyle(
-                            fontSize: 12,
+                          style: textTheme.labelSmall?.copyWith(
                             fontWeight: FontWeight.w600,
-                            color: isOn ? Colors.white : scheme.onSurface,
+                            color: isOn ? scheme.onPrimary : scheme.onSurface,
                           ),
                         ),
                       ),
@@ -158,13 +153,10 @@ class _SellerListingPageState extends State<SellerListingPage> {
                         padding: const EdgeInsets.fromLTRB(18, 16, 10, 6),
                         child: Row(
                           children: [
-                            const Expanded(
+                            Expanded(
                               child: Text(
                                 "Filters",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
-                                ),
+                                style: textTheme.titleMedium,
                               ),
                             ),
                             TextButton(
@@ -204,7 +196,6 @@ class _SellerListingPageState extends State<SellerListingPage> {
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: scheme.primary,
-                              foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14),
                               ),
@@ -216,10 +207,7 @@ class _SellerListingPageState extends State<SellerListingPage> {
                                 _selectedVariantByDoc.clear();
                               });
                             },
-                            child: const Text(
-                              "Apply",
-                              style: TextStyle(fontWeight: FontWeight.w700),
-                            ),
+                            child: Text("Apply", style: textTheme.labelLarge),
                           ),
                         ),
                       ),
@@ -237,12 +225,11 @@ class _SellerListingPageState extends State<SellerListingPage> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      backgroundColor: AppColors.background(context),
-      appBar: AppBar(
-        title: Text(widget.model, style: AppTextStyles.heading(context)),
-      ),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: BrandAppBar(title: widget.model),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
             .collection('products')
@@ -257,7 +244,12 @@ class _SellerListingPageState extends State<SellerListingPage> {
           final docs = snapshot.data!.docs;
 
           if (docs.isEmpty) {
-            return const Center(child: Text("No listings yet"));
+            return Center(
+              child: Text(
+                "No listings yet",
+                style: textTheme.bodyMedium,
+              ),
+            );
           }
 
           // ✅ collect all filter options from data
@@ -316,25 +308,25 @@ class _SellerListingPageState extends State<SellerListingPage> {
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.tune,
-                                size: 18,
-                                color: scheme.onSurface.withOpacity(0.7)),
+                            Icon(
+                              Icons.tune,
+                              size: 18,
+                              color: scheme.onSurface.withValues(alpha: 0.7),
+                            ),
                             const SizedBox(width: 8),
                             Text(
                               _activeFilterCount == 0
                                   ? "Filters"
                                   : "Filters • $_activeFilterCount",
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: scheme.onSurface.withOpacity(0.85),
+                              style: textTheme.labelLarge?.copyWith(
+                                color: scheme.onSurface.withValues(alpha: 0.85),
                               ),
                             ),
                             const Spacer(),
                             Text(
                               "${filteredDocs.length} results",
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: scheme.onSurface.withOpacity(0.55),
+                              style: textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurface.withValues(alpha: 0.55),
                               ),
                             ),
                           ],
@@ -369,7 +361,7 @@ class _SellerListingPageState extends State<SellerListingPage> {
                           child: const Text("Clear"),
                         ),
                       ),
-                    ]
+                    ],
                   ],
                 ),
               ),
@@ -386,7 +378,8 @@ class _SellerListingPageState extends State<SellerListingPage> {
 
                     final sellerName = (data['sellerName'] ?? '').toString();
                     final condition = (data['condition'] ?? '').toString();
-                    final variantsRaw = (data['variants'] ?? []) as List<dynamic>;
+                    final variantsRaw =
+                        (data['variants'] ?? []) as List<dynamic>;
 
                     // filter variants
                     final variants = variantsRaw
@@ -400,7 +393,7 @@ class _SellerListingPageState extends State<SellerListingPage> {
 
                     if (currentSelectedId != null) {
                       selectedVariant = variants.firstWhere(
-                            (v) => (v['id'] ?? '').toString() == currentSelectedId,
+                        (v) => (v['id'] ?? '').toString() == currentSelectedId,
                         orElse: () => {},
                       );
                       if (selectedVariant.isEmpty) {
@@ -409,7 +402,9 @@ class _SellerListingPageState extends State<SellerListingPage> {
                     }
 
                     // if not selected, default to first variant
-                    selectedVariant ??= variants.isNotEmpty ? variants.first : null;
+                    selectedVariant ??= variants.isNotEmpty
+                        ? variants.first
+                        : null;
 
                     if (selectedVariant != null) {
                       _selectedVariantByDoc[doc.id] =
@@ -438,10 +433,7 @@ class _SellerListingPageState extends State<SellerListingPage> {
                                   sellerName,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                                  style: textTheme.titleMedium,
                                 ),
                               ),
                               Container(
@@ -450,15 +442,15 @@ class _SellerListingPageState extends State<SellerListingPage> {
                                   vertical: 6,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: scheme.onSurface.withOpacity(0.06),
+                                  color: scheme.onSurface.withValues(alpha: 0.06),
                                   borderRadius: BorderRadius.circular(999),
                                 ),
                                 child: Text(
                                   condition,
-                                  style: TextStyle(
-                                    fontSize: 12,
+                                  style: textTheme.labelSmall?.copyWith(
                                     fontWeight: FontWeight.w600,
-                                    color: scheme.onSurface.withOpacity(0.7),
+                                    color: scheme.onSurface
+                                        .withValues(alpha: 0.7),
                                   ),
                                 ),
                               ),
@@ -476,7 +468,7 @@ class _SellerListingPageState extends State<SellerListingPage> {
                               final label =
                                   "${v['color']} • ${v['ram']} • ${v['storage']}";
                               final isSelected =
-                              (_selectedVariantByDoc[doc.id] == vid);
+                                  (_selectedVariantByDoc[doc.id] == vid);
 
                               return GestureDetector(
                                 onTap: () {
@@ -503,11 +495,10 @@ class _SellerListingPageState extends State<SellerListingPage> {
                                   ),
                                   child: Text(
                                     label,
-                                    style: TextStyle(
-                                      fontSize: 12,
+                                    style: textTheme.labelSmall?.copyWith(
                                       fontWeight: FontWeight.w600,
                                       color: isSelected
-                                          ? Colors.white
+                                          ? scheme.onPrimary
                                           : scheme.onSurface,
                                     ),
                                   ),
@@ -522,16 +513,15 @@ class _SellerListingPageState extends State<SellerListingPage> {
                           if (selectedPrice == null)
                             Text(
                               "Select variant",
-                              style: TextStyle(
-                                color: scheme.onSurface.withOpacity(0.55),
+                              style: textTheme.bodyMedium?.copyWith(
+                                color: scheme.onSurface.withValues(alpha: 0.55),
                                 fontWeight: FontWeight.w600,
                               ),
                             )
                           else
                             Text(
                               "$selectedPrice MMK",
-                              style: const TextStyle(
-                                fontSize: 20,
+                              style: textTheme.titleLarge?.copyWith(
                                 fontWeight: FontWeight.w800,
                               ),
                             ),

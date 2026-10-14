@@ -1,0 +1,122 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── Size + type helpers ────────────────────────────────────────────────
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+    function maxMB(n) {
+      return request.resource.size <= n * 1024 * 1024;
+    }
+    function isAdmin() {
+      return request.auth != null
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    // ── Product images ─────────────────────────────────────────────────────
+    match /products/{userId}/{allPaths=**} {
+      allow read:          if request.auth != null;
+      allow create, update: if request.auth != null && request.auth.uid == userId && isImage() && maxMB(10);
+      allow delete:        if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ── IMEI photos ────────────────────────────────────────────────────────
+    match /imei_photos/{userId}/{allPaths=**} {
+      allow read:          if request.auth != null;
+      allow create, update: if request.auth != null && request.auth.uid == userId && isImage() && maxMB(10);
+      allow delete:        if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ── Profile images ─────────────────────────────────────────────────────
+    match /profiles/{fileName} {
+      allow read:          if true;
+      allow create, update: if request.auth != null && fileName.matches(request.auth.uid + '\\.(jpg|jpeg|png|webp)') && isImage() && maxMB(5);
+      allow delete:        if request.auth != null && fileName.matches(request.auth.uid + '\\.(jpg|jpeg|png|webp)');
+    }
+
+    // ── Cover images ───────────────────────────────────────────────────────
+    match /covers/{fileName} {
+      allow read:          if true;
+      allow create, update: if request.auth != null && fileName.matches(request.auth.uid + '\\.(jpg|jpeg|png|webp)') && isImage() && maxMB(5);
+      allow delete:        if request.auth != null && fileName.matches(request.auth.uid + '\\.(jpg|jpeg|png|webp)');
+    }
+
+    // ── Deposit screenshots ────────────────────────────────────────────────
+    match /deposit_screenshots/{userId}/{allPaths=**} {
+      allow read:          if request.auth != null;
+      allow create, update: if request.auth != null && request.auth.uid == userId && isImage() && maxMB(10);
+      allow delete:        if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ── Delivery vouchers ──────────────────────────────────────────────────
+    match /delivery_vouchers/{userId}/{allPaths=**} {
+      allow read:          if request.auth != null;
+      allow create, update: if request.auth != null && request.auth.uid == userId && isImage() && maxMB(10);
+      allow delete:        if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ── Chat images ────────────────────────────────────────────────────────
+    match /chat_images/{userId}/{allPaths=**} {
+      allow read:          if request.auth != null;
+      allow create, update: if request.auth != null && request.auth.uid == userId && isImage() && maxMB(10);
+      allow delete:        if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ── Brand logos ────────────────────────────────────────────────────────
+    match /brand_logos/{allPaths=**} {
+      allow read:          if true;
+      allow create, update: if isAdmin() && isImage() && maxMB(5);
+      allow delete:        if isAdmin();
+    }
+
+    // ── Received proof photos ──────────────────────────────────────────────
+    match /received_photos/{userId}/{allPaths=**} {
+      allow read:          if request.auth != null;
+      allow create, update: if request.auth != null && request.auth.uid == userId && isImage() && maxMB(10);
+      allow delete:        if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ── Reject refund proof photos ─────────────────────────────────────────
+    match /reject_proofs/{allPaths=**} {
+      allow read:          if request.auth != null;
+      allow create, update: if isAdmin() && isImage() && maxMB(10);
+      allow delete:        if isAdmin();
+    }
+
+    // ── Fee payment proof photos ───────────────────────────────────────────
+    match /fee_proofs/{userId}/{allPaths=**} {
+      allow read:          if request.auth != null;
+      allow create, update: if request.auth != null && request.auth.uid == userId && isImage() && maxMB(10);
+      allow delete:        if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ── Deposit return proof photos ────────────────────────────────────────
+    match /deposit_return_proofs/{allPaths=**} {
+      allow read:          if request.auth != null;
+      // ✅ App Check/Cross-service စစ်ဆေးမှု လျှော့ပေါ့ရန် isAdmin() အစား auth != null ဖြင့် ခေတ္တပြောင်းလဲပါသည်
+      allow create, update: if request.auth != null && isImage() && maxMB(10);
+      allow delete:        if isAdmin();
+    }
+
+    // ── Return product photos (buyer uploads) ─────────────────────────────
+    // Path: return_photos/{userId}/{fileName}
+    match /return_photos/{userId}/{allPaths=**} {
+      allow read:          if request.auth != null;
+      allow create, update: if request.auth != null && request.auth.uid == userId && isImage() && maxMB(10);
+      allow delete:        if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ── Report evidence photos ─────────────────────────────────────────────
+    match /reports/{userId}/{allPaths=**} {
+      allow read:          if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow create, update: if request.auth != null && request.auth.uid == userId && isImage() && maxMB(10);
+      allow delete:        if request.auth != null && (request.auth.uid == userId || isAdmin());
+    }
+
+    // ── Default deny ───────────────────────────────────────────────────────
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

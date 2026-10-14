@@ -1,0 +1,480 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    /* =========================================================
+       HELPERS
+    ========================================================= */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function uid() {
+      return request.auth.uid;
+    }
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    function isAdmin() {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == "admin";
+    }
+    function isOwner(userId) {
+      return isSignedIn() && uid() == userId;
+    }
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).changedKeys();
+    }
+    function onlyChanges(allowed) {
+      return changedKeys().hasOnly(allowed);
+    }
+    function noFieldDeletes() {
+      return request.resource.data.keys().hasAll(resource.data.keys());
+    }
+    function isString(x) { return x is string; }
+    function isBool(x)   { return x is bool; }
+    function nonEmptyString(x) {
+      return isString(x) && x.size() > 0;
+    }
+    /* =========================================================
+       ORDER STATUS + TRANSITIONS
+    ========================================================= */
+    function canBuyerCancel(fromStatus, toStatus) {
+      return (toStatus == "CANCELLED")
+        && (fromStatus == "DEPOSIT_PENDING" || fromStatus == "DEPOSIT_APPROVED");
+    }
+    // Buyer confirm received: ON_THE_WAY → FEE_PENDING
+    function canBuyerComplete(fromStatus, toStatus) {
+      return (fromStatus == "ON_THE_WAY") && (toStatus == "FEE_PENDING");
+    }
+    function canSellerShip(fromStatus, toStatus) {
+      return (fromStatus == "DEPOSIT_APPROVED") && (toStatus == "ON_THE_WAY");
+    }
+    function canAdminApprove(fromStatus, toStatus) {
+      return (fromStatus == "DEPOSIT_PENDING") && (toStatus == "DEPOSIT_APPROVED");
+    }
+    function canAdminReject(fromStatus, toStatus) {
+      return (toStatus == "REJECTED")
+        && (fromStatus == "DEPOSIT_PENDING" || fromStatus == "DEPOSIT_APPROVED");
+    }
+    function canAdminRefund(fromStatus, toStatus) {
+      return (toStatus == "REFUNDED")
+        && (fromStatus == "DEPOSIT_PENDING"
+            || fromStatus == "DEPOSIT_APPROVED"
+            || fromStatus == "CANCELLED");
+    }
+    // Admin confirm fee received: FEE_PENDING → COMPLETED
+    function canAdminConfirmFee(fromStatus, toStatus) {
+      return (fromStatus == "FEE_PENDING") && (toStatus == "COMPLETED");
+    }
+    /* =========================================================
+       USERS
+    ========================================================= */
+    match /users/{userId} {
+      allow read: if true;
+
+      allow create: if isOwner(userId)
+        && request.resource.data.get('uid', userId) == userId
+        && (request.resource.data.get('role', 'user') == "user");
+
+      allow update: if isOwner(userId)
+        && !changedKeys().hasAny(["role", "uid", "email", "isVerified", "isBanned"])
+        && (
+          !changedKeys().hasAny(["verificationDocUrl"]) ||
+          resource.data.get('verificationDocUrl', '') == ''
+        );
+
+      allow update: if isAdmin()
+        && noFieldDeletes()
+        && onlyChanges([
+          "role", "isVerified", "isBanned", "banReason", "bannedAt", "bannedBy",
+          "rejectCount", "pendingFee", "feeDeadline", "listingsFrozen", "updatedAt",
+          "verificationDocUrl", "shopCity", "shopAddress", "name", "phone", "profileImage", "coverImage",
+          "isOnline", "fcmToken", "avgRating", "reviewCount", "totalSales", "totalOrders", "createdAt"
+        ]);
+      // avgRating + reviewCount are written only by Cloud Functions (Admin SDK).
+      // Client-side write is intentionally removed to prevent manipulation.
+      allow delete: if false;
+      match /favorites/{favId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+    /* =========================================================
+       PRODUCTS
+    ========================================================= */
+    match /products/{productId} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.sellerId == uid()
+        && nonEmptyString(request.resource.data.name)
+        && nonEmptyString(request.resource.data.brand)
+        && isBool(request.resource.data.active);
+      allow update: if isSignedIn()
+        && resource.data.sellerId == uid()
+        && request.resource.data.sellerId == resource.data.sellerId
+        && noFieldDeletes()
+        && onlyChanges([
+          "price",
+          "originalPrice",
+          "detail",
+          "image",
+          "coverImage",
+          "images",
+          "imeiPhoto",
+          "updatedAt"
+        ]);
+      allow delete: if isSignedIn()
+        && (resource.data.sellerId == uid() || isAdmin());
+      allow update: if isAdmin()
+        && noFieldDeletes()
+        && onlyChanges([
+          "active",
+          "hasActiveOrder",
+          "activeOrderId",
+          "imeiStatus",
+          "imeiCheckParsed",
+          "imeiCheckedAt",
+          "imeiCheckedBy",
+          "imeiCheckService",
+          "imeiCheckRaw",
+          "rejectedAt",
+          "rejectedBy",
+          "badgeOverrideEnabled",
+          "badgeOverrideRecommended",
+          "badgeOverrideTrusted",
+          "badgeOverrideReason",
+          "badgeCalculatedAt",
+          "badgeRecommended",
+          "badgeTrusted",
+          "adminNote",
+          "updatedAt"
+        ]);
+      // ✅ Buyer lock product when creating order
+      allow update: if isSignedIn()
+        && resource.data.get('active', true) == true
+        && resource.data.get('hasActiveOrder', false) == false
+        && request.resource.data.active == false
+        && request.resource.data.hasActiveOrder == true
+        && request.resource.data.activeOrderId is string
+        && request.resource.data.activeOrderId.size() > 0
+        && noFieldDeletes()
+        && onlyChanges([
+          "active",
+          "hasActiveOrder",
+          "activeOrderId",
+          "updatedAt"
+        ]);
+      // ✅ Buyer cancel product unlock —
+      // buyer က order cancel ဖြစ်ပြီးနောက် product lock ဖြေနိုင်ရန်
+      // cross-reference: activeOrderId → orders doc ထဲ buyerId == uid + status == CANCELLED
+      allow update: if isSignedIn()
+        && onlyChanges(["hasActiveOrder", "active", "activeOrderId", "updatedAt"])
+        && request.resource.data.hasActiveOrder == false
+        && request.resource.data.active == true
+        && resource.data.activeOrderId != null
+        && resource.data.activeOrderId is string
+        && resource.data.activeOrderId.size() > 0
+        && get(/databases/$(database)/documents/orders/$(resource.data.activeOrderId)).data.buyerId == uid()
+        && get(/databases/$(database)/documents/orders/$(resource.data.activeOrderId)).data.status == "CANCELLED";
+    }
+    /* =========================================================
+       BRANDS
+    ========================================================= */
+    match /brands/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /phone_brands/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    /* =========================================================
+       PHONE MODELS
+    ========================================================= */
+    match /phone_models/{id} {
+      allow read: if true;
+      allow create: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+    /* =========================================================
+       IMEI REGISTRY
+    ========================================================= */
+    match /imei_registry/{imei} {
+      // Seller reads own doc only; admin reads all.
+      // Buyers must NOT access imeiFull — serious data leak risk.
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.sellerId == uid());
+      allow create: if isSignedIn()
+        && request.resource.data.sellerId == uid()
+        && request.resource.data.imeiFull is string
+        && request.resource.data.imeiFull.size() > 0
+        && request.resource.data.imeiFull == imei
+        && request.resource.data.status in [
+          "NOT_VERIFIED",
+          "VALID",
+          "BLACKLISTED",
+          "REJECTED"
+        ]
+        && (
+          request.resource.data.createdAt is timestamp
+          || request.resource.data.createdAt == null
+        );
+      allow update: if isAdmin()
+        && noFieldDeletes()
+        && onlyChanges([
+          "status",
+          "imeiPhoto",
+          "verifiedAt",
+          "verifiedBy",
+          "blacklistReason",
+          "notes",
+          "rejectedAt",
+          "rejectedBy",
+          "ceirImeiStatus",
+          "ceirTaxStatus",
+          "ceirBlockingStatus",
+          "ceirCheckedAt",
+          "ceirCheckedBy",
+          "specsVerified",
+          "specsVerifiedAt",
+          "specsVerifiedBy",
+          "specsMismatchNote",
+          "updatedAt"
+        ]);
+      allow update: if isSignedIn()
+        && resource.data.sellerId == uid()
+        && onlyChanges(["imeiPhoto", "updatedAt"]);
+      allow delete: if isSignedIn()
+        && (resource.data.sellerId == uid() || isAdmin());
+    }
+    /* =========================================================
+       MODEL REQUESTS
+    ========================================================= */
+    match /model_requests/{requestId} {
+      allow create: if isSignedIn()
+        && nonEmptyString(request.resource.data.brand)
+        && nonEmptyString(request.resource.data.model)
+        && request.resource.data.sellerId == uid()
+        && request.resource.data.status == "PENDING";
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.sellerId == uid());
+      allow update: if isAdmin()
+        && noFieldDeletes()
+        && onlyChanges([
+          "brand",
+          "model",
+          "series",
+          "deviceType",
+          "status",
+          "adminNote",
+          "approvedAt",
+          "updatedAt",
+          "reviewedBy",
+          "reviewedAt",
+          "approvedModelId",
+          "isSeenBySeller"
+        ]);
+      // Seller marks their own requests as seen (isSeenBySeller only — no noFieldDeletes needed)
+      allow update: if isSignedIn()
+        && resource.data.sellerId == uid()
+        && onlyChanges(["isSeenBySeller"]);
+    }
+    /* =========================================================
+       IMEI REPORTS
+    ========================================================= */
+    match /imei_reports/{docId} {
+      allow read, write: if isAdmin();
+    }
+    /* =========================================================
+       ORDERS
+    ========================================================= */
+    match /orders/{orderId} {
+      allow create: if isSignedIn()
+        && request.resource.data.buyerId == uid()
+        && request.resource.data.status == "DEPOSIT_PENDING"
+        && request.resource.data.depositStatus == "PENDING";
+      allow read: if isSignedIn() && (
+        resource.data.buyerId == uid()
+        || resource.data.sellerId == uid()
+        || isAdmin()
+      );
+      // ✅ Admin: approve, reject, refund, confirm fee, return deposit, or field-only update
+      allow update: if isSignedIn() && isAdmin()
+        && noFieldDeletes()
+        && onlyChanges([
+          "status",
+          "depositStatus",
+          "imeiFull",
+          "imeiPhoto",
+          "rejectReason",
+          "rejectRefundProofUrl",
+          "adminNote",
+          "refundedAt",
+          "approvedAt",
+          "feeConfirmed",
+          "depositReturned",
+          "depositReturnProofUrl",
+          "depositReturnedAt",
+          "updatedAt",
+          "updatedBy"
+        ])
+        && (
+          canAdminApprove(resource.data.status, request.resource.data.status)
+          || canAdminReject(resource.data.status, request.resource.data.status)
+          || canAdminRefund(resource.data.status, request.resource.data.status)
+          || canAdminConfirmFee(resource.data.status, request.resource.data.status)
+          || !changedKeys().hasAny(["status"])
+        );
+      // ✅ Seller: mark shipped
+      allow update: if isSignedIn()
+        && resource.data.sellerId == uid()
+        && noFieldDeletes()
+        && onlyChanges([
+          "status",
+          "deliveryServiceName",
+          "deliveryPhone",
+          "deliveryVoucherUrl",
+          "shippedAt",
+          "trackingCode",
+          "updatedAt",
+          "updatedBy"
+        ])
+        && canSellerShip(resource.data.status, request.resource.data.status);
+      // ✅ Seller: submit fee payment proof (FEE_PENDING stage only)
+      allow update: if isSignedIn()
+        && resource.data.sellerId == uid()
+        && resource.data.status == "FEE_PENDING"
+        && noFieldDeletes()
+        && onlyChanges([
+          "feePayerName",
+          "feeProofUrl",
+          "feeTransferAmount",
+          "updatedAt",
+          "updatedBy"
+        ]);
+      // ✅ Buyer: cancel or confirm received (ON_THE_WAY → FEE_PENDING)
+      allow update: if isSignedIn()
+        && resource.data.buyerId == uid()
+        && noFieldDeletes()
+        && onlyChanges([
+          "status",
+          "platformFee",
+          "receivedReceiptUrl",
+          "receivedProductUrl",
+          "cancelledAt",
+          "completedAt",
+          "updatedAt",
+          "updatedBy"
+        ])
+        && (
+          canBuyerCancel(resource.data.status, request.resource.data.status)
+          || canBuyerComplete(resource.data.status, request.resource.data.status)
+        );
+      allow delete: if false;
+    }
+    /* =========================================================
+       NOTIFICATIONS
+    ========================================================= */
+    match /notifications/{doc} {
+      allow create: if false;
+      allow read: if isSignedIn()
+        && request.auth.uid == resource.data.userId;
+      allow update: if isSignedIn()
+        && request.auth.uid == resource.data.userId
+        && onlyChanges(["isRead", "readAt"]);
+      allow delete: if false;
+    }
+    /* =========================================================
+       CHATS
+    ========================================================= */
+    match /chats/{chatId} {
+      allow list: if request.auth != null
+        && request.auth.uid in resource.data.participants;
+      allow get: if request.auth != null
+        && (
+          !exists(/databases/$(database)/documents/chats/$(chatId))
+          || request.auth.uid in resource.data.participants
+        );
+      allow create: if request.auth != null
+        && request.auth.uid in request.resource.data.participants;
+      allow update: if request.auth != null
+        && request.auth.uid in resource.data.participants;
+      allow delete: if false;
+    }
+    match /chats/{chatId}/messages/{messageId} {
+      allow read, write: if request.auth != null
+        && exists(/databases/$(database)/documents/chats/$(chatId))
+        && request.auth.uid in
+           get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+    }
+    /* =========================================================
+       REPORTS
+    ========================================================= */
+    match /reports/{reportId} {
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasAll([
+          "reportedBy",
+          "reportedUserId",
+          "reason",
+          "status",
+          "createdAt"
+        ])
+        && request.resource.data.reportedBy == uid();
+      // Admin reads all; reporter reads own reports (duplicate guard query)
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.reportedBy == uid());
+      allow update: if isAdmin()
+        && noFieldDeletes()
+        && onlyChanges([
+          "status",
+          "adminNote",
+          "updatedAt"
+        ]);
+      allow delete: if false;
+    }
+    /* =========================================================
+       BADGE AUDIT LOGS
+    ========================================================= */
+    match /badge_audit_logs/{doc} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    /* =========================================================
+       SETTINGS
+    ========================================================= */
+    match /settings/{document} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    /* =========================================================
+       REVIEWS
+    ========================================================= */
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.buyerId == uid()
+        && nonEmptyString(request.resource.data.sellerId)
+        && nonEmptyString(request.resource.data.orderId)
+        // ✅ Document ID must equal orderId — server-side duplicate guard.
+        // Second submit attempt hits allow update = false → auto denied.
+        && reviewId == request.resource.data.orderId
+        && request.resource.data.rating is int
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5;
+      allow update, delete: if false;
+    }
+    /* =========================================================
+       ANNOUNCEMENTS
+    ========================================================= */
+    match /announcements/{announcementId} {
+      allow read:   if isSignedIn(); // all users can read (history)
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+    /* =========================================================
+       DEFAULT DENY
+    ========================================================= */
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

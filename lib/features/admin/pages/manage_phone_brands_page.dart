@@ -1,10 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:sigmamoby/core/widgets/brand_app_bar.dart';
 class ManagePhoneBrandsPage extends StatefulWidget {
   const ManagePhoneBrandsPage({super.key});
 
@@ -12,40 +11,20 @@ class ManagePhoneBrandsPage extends StatefulWidget {
   State<ManagePhoneBrandsPage> createState() => _ManagePhoneBrandsPageState();
 }
 
+
 class _ManagePhoneBrandsPageState extends State<ManagePhoneBrandsPage> {
+  final TextEditingController _brandCtrl = TextEditingController();
+  @override
+  void dispose() {
+    _brandCtrl.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
-    _makeMeAdmin();
   }
 
-  Future<void> _makeMeAdmin() async {
-    try {
-      final callable =
-      FirebaseFunctions.instance.httpsCallable('makeAdmin');
-
-      final result = await callable.call({
-        "uid": FirebaseAuth.instance.currentUser!.uid
-      });
-      final user = FirebaseAuth.instance.currentUser;
-      final idToken = await user?.getIdTokenResult(true);
-
-      print("CLAIMS = ${idToken?.claims}");
-
-      print("✅ RESULT: ${result.data}");
-    } catch (e) {
-      print("❌ makeAdmin ERROR: $e");
-    }
-  }
-
-
-  Future<void> _debugAdminClaim() async {
-    final user = FirebaseAuth.instance.currentUser;
-    final idToken = await user?.getIdTokenResult(true);
-
-    print("UID = ${user?.uid}");
-    print("CLAIMS = ${idToken?.claims}");
-  }
 
 
   Future<void> _pickAndUploadLogo(String brandId) async {
@@ -60,11 +39,20 @@ class _ManagePhoneBrandsPageState extends State<ManagePhoneBrandsPage> {
 
       final file = File(picked.path);
 
+      final size = await file.length();
+      if (size > 2000000) {
+        _setLog("Image too large ❌ (max 2MB)");
+        return;
+      }
+
       final ref = FirebaseStorage.instance
           .ref()
           .child('brand_logos/$brandId.png');
 
-      await ref.putFile(file);
+      await ref.putFile(
+        file,
+        SettableMetadata(contentType: "image/png"),
+      );
 
       final url = await ref.getDownloadURL();
 
@@ -162,6 +150,19 @@ class _ManagePhoneBrandsPageState extends State<ManagePhoneBrandsPage> {
 
     final name = (res ?? "").trim();
     if (name.isEmpty || name == oldName) return;
+    final newId = name
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+    final existing = await FirebaseFirestore.instance
+        .collection("phone_brands")
+        .doc(newId)
+        .get();
+
+    if (existing.exists) {
+      _setLog("Brand already exists ⚠️");
+      return;
+    }
 
     try {
       await ref.set(
@@ -178,6 +179,69 @@ class _ManagePhoneBrandsPageState extends State<ManagePhoneBrandsPage> {
     }
   }
 
+  Future<void> _addBrand() async {
+    _brandCtrl.clear();
+
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Add New Brand"),
+        content: TextField(
+          controller: _brandCtrl,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: "Brand name",
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, _brandCtrl.text),
+            child: const Text("Add"),
+          ),
+        ],
+      ),
+    );
+
+    final brand = (name ?? "").trim();
+    if (brand.isEmpty) return;
+
+    try {
+      final id = brand
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+      final doc = await FirebaseFirestore.instance
+          .collection("phone_brands")
+          .doc(id)
+          .get();
+
+      if (doc.exists) {
+        _setLog("Brand already exists ⚠️");
+        return;
+      }
+      await FirebaseFirestore.instance
+          .collection("phone_brands")
+          .doc(id)
+          .set({
+        "name": brand,
+        "nameLower": _normLower(brand),
+        "active": true,
+        "order": 999,
+        "createdAt": FieldValue.serverTimestamp(),
+        "updatedAt": FieldValue.serverTimestamp(),
+      });
+
+      _setLog("Brand added ✅ $brand");
+    } catch (e) {
+      _setLog("Add brand error ❌ $e");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -191,14 +255,14 @@ class _ManagePhoneBrandsPageState extends State<ManagePhoneBrandsPage> {
         .snapshots();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Manage Phone Brands"),
+      appBar: BrandAppBar(
+        title: "Manage Phone Brands",
         actions: [
           if (_saving)
             const Padding(
               padding: EdgeInsets.only(right: 14),
               child: Center(
-                child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
               ),
             ),
         ],
@@ -224,6 +288,20 @@ class _ManagePhoneBrandsPageState extends State<ManagePhoneBrandsPage> {
             ),
           ),
 
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.add),
+                  label: const Text("Add Brand"),
+                  onPressed: _addBrand,
+                ),
+              ],
+            ),
+          ),
+
           if (_log.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
@@ -231,7 +309,7 @@ class _ManagePhoneBrandsPageState extends State<ManagePhoneBrandsPage> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: scheme.surfaceVariant,
+                  color: scheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(_log),
@@ -268,14 +346,13 @@ class _ManagePhoneBrandsPageState extends State<ManagePhoneBrandsPage> {
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                   itemCount: docs.length,
                   buildDefaultDragHandles: false, // we'll place our own drag handle
-                  onReorder: (oldIndex, newIndex) async {
+                  onReorderItem: (oldIndex, newIndex) async {
                     // IMPORTANT: when searching, reordering filtered list will produce wrong global order
                     if (qn.isNotEmpty) {
                       _setLog("Search ဖွင့်ထားချိန် reorder မလုပ်ပါ (Search ပိတ်ပြီးလုပ်ပါ)");
                       return;
                     }
 
-                    if (newIndex > oldIndex) newIndex -= 1;
                     final moved = docs.removeAt(oldIndex);
                     docs.insert(newIndex, moved);
 
@@ -304,7 +381,7 @@ class _ManagePhoneBrandsPageState extends State<ManagePhoneBrandsPage> {
                               onTap: () => _pickAndUploadLogo(d.id),
                               child: CircleAvatar(
                                 radius: 18,
-                                backgroundColor: scheme.surfaceVariant,
+                                backgroundColor: scheme.surfaceContainerHighest,
                                 backgroundImage: (data["logoUrl"] ?? "").toString().isNotEmpty
                                     ? NetworkImage(data["logoUrl"])
                                     : null,

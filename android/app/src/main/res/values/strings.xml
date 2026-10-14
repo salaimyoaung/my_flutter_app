@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Sigma Moby</string>
+    <string name="facebook_app_id">1339663484760564</string>
+    <string name="fb_login_protocol_scheme">fb1339663484760564</string>
+    <string name="facebook_client_token">c1e39c88f6b0a5aed76876b00a066155</string>
+</resources>

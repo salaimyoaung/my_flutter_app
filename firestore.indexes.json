@@ -1,4 +1,182 @@
 {
-  "indexes": [],
+  "indexes": [
+
+    { "collectionGroup": "badge_audit_logs", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "productId",  "order": "ASCENDING" },
+        { "fieldPath": "createdAt",  "order": "DESCENDING" }
+    ]},
+
+    { "collectionGroup": "chats", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "participants", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "updatedAt",    "order": "DESCENDING" }
+    ]},
+
+    { "collectionGroup": "imei_registry", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "status",    "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]},
+
+    { "collectionGroup": "imei_reports", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "status",    "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]},
+
+    { "collectionGroup": "model_requests", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "sellerId",  "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]},
+
+    { "collectionGroup": "model_requests", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "status",    "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]},
+
+    { "collectionGroup": "notifications", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "userId",    "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]},
+
+    { "collectionGroup": "notifications", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "isRead",     "order": "ASCENDING" },
+        { "fieldPath": "targetRole", "order": "ASCENDING" },
+        { "fieldPath": "userId",     "order": "ASCENDING" },
+        { "fieldPath": "type",       "order": "ASCENDING" }
+    ]},
+
+    { "collectionGroup": "notifications", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "userId",     "order": "ASCENDING" },
+        { "fieldPath": "isRead",     "order": "ASCENDING" },
+        { "fieldPath": "type",       "order": "ASCENDING" },
+        { "fieldPath": "targetRole", "order": "ASCENDING" }
+    ]},
+
+    { "collectionGroup": "notifications", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "userId",     "order": "ASCENDING" },
+        { "fieldPath": "targetRole", "order": "ASCENDING" },
+        { "fieldPath": "isRead",     "order": "ASCENDING" },
+        { "fieldPath": "type",       "order": "ASCENDING" }
+    ]},
+
+    { "collectionGroup": "notifications", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "userId",  "order": "ASCENDING" },
+        { "fieldPath": "isRead",  "order": "ASCENDING" },
+        { "fieldPath": "type",    "order": "ASCENDING" }
+    ]},
+
+    { "collectionGroup": "notifications", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "userId",    "order": "ASCENDING" },
+        { "fieldPath": "isRead",    "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]},
+
+    { "collectionGroup": "orders", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "buyerId",      "order": "ASCENDING" },
+        { "fieldPath": "createdAt",    "order": "DESCENDING" }
+    ]},
+
+    { "collectionGroup": "orders", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "buyerId",      "order": "ASCENDING" },
+        { "fieldPath": "buyerVisible", "order": "ASCENDING" },
+        { "fieldPath": "createdAt",    "order": "DESCENDING" }
+    ]},
+
+    { "collectionGroup": "orders", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "sellerId",  "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]},
+
+    { "collectionGroup": "orders", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "sellerId",       "order": "ASCENDING" },
+        { "fieldPath": "sellerVisible",  "order": "ASCENDING" },
+        { "fieldPath": "createdAt",      "order": "DESCENDING" }
+    ]},
+
+    { "collectionGroup": "phone_brands", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "order",     "order": "ASCENDING" },
+        { "fieldPath": "nameLower", "order": "ASCENDING" }
+    ]},
+
+    { "collectionGroup": "phone_brands", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "active",    "order": "ASCENDING" },
+        { "fieldPath": "order",     "order": "ASCENDING" },
+        { "fieldPath": "nameLower", "order": "ASCENDING" }
+    ]},
+
+    { "collectionGroup": "phone_models", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "active", "order": "ASCENDING" },
+        { "fieldPath": "brand",  "order": "ASCENDING" },
+        { "fieldPath": "order",  "order": "ASCENDING" }
+    ]},
+
+    { "collectionGroup": "phone_models", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "brand",       "order": "ASCENDING" },
+        { "fieldPath": "deviceType",  "order": "ASCENDING" },
+        { "fieldPath": "releaseYear", "order": "DESCENDING" }
+    ]},
+
+    { "collectionGroup": "phone_models", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "active",     "order": "ASCENDING" },
+        { "fieldPath": "brand",      "order": "ASCENDING" },
+        { "fieldPath": "deviceType", "order": "ASCENDING" },
+        { "fieldPath": "model",      "order": "ASCENDING" }
+    ]},
+
+    { "collectionGroup": "phone_models", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "active",      "order": "ASCENDING" },
+        { "fieldPath": "brandLower",  "order": "ASCENDING" },
+        { "fieldPath": "deviceType",  "order": "ASCENDING" },
+        { "fieldPath": "model",       "order": "ASCENDING" }
+    ]},
+
+    { "collectionGroup": "phone_models", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "active",      "order": "ASCENDING" },
+        { "fieldPath": "brand",       "order": "ASCENDING" },
+        { "fieldPath": "deviceType",  "order": "ASCENDING" },
+        { "fieldPath": "series",      "order": "ASCENDING" },
+        { "fieldPath": "model",       "order": "ASCENDING" }
+    ]},
+
+    { "collectionGroup": "products", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "sellerId",  "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]},
+
+    { "collectionGroup": "products", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "brand",     "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]},
+
+    { "collectionGroup": "products", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "brand", "order": "ASCENDING" },
+        { "fieldPath": "model", "order": "ASCENDING" },
+        { "fieldPath": "price", "order": "ASCENDING" }
+    ]},
+
+    { "collectionGroup": "products", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "active", "order": "ASCENDING" },
+        { "fieldPath": "brand",  "order": "ASCENDING" },
+        { "fieldPath": "model",  "order": "ASCENDING" },
+        { "fieldPath": "price",  "order": "ASCENDING" }
+    ]},
+
+    { "collectionGroup": "products", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "active",   "order": "ASCENDING" },
+        { "fieldPath": "brand",    "order": "ASCENDING" },
+        { "fieldPath": "model",    "order": "ASCENDING" },
+        { "fieldPath": "sellerId", "order": "ASCENDING" },
+        { "fieldPath": "price",    "order": "ASCENDING" }
+    ]},
+
+    { "collectionGroup": "products", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "category",  "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+    ]},
+
+    { "collectionGroup": "reports", "queryScope": "COLLECTION", "fields": [
+        { "fieldPath": "status",    "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]}
+
+  ],
   "fieldOverrides": []
 }
